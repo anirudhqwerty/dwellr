@@ -12,8 +12,9 @@ import {
 import { supabase } from '../../lib/supabase';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 
-export default function SeekerHome() {
+export default function OwnerHome() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,6 +55,16 @@ export default function SeekerHome() {
     router.replace('/(auth)/login');
   };
 
+  const navigateToCreateListing = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push('./owner/create-listing');
+  };
+
+  const navigateToNotificationSettings = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('./(tabs)/notifications');
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -73,8 +84,8 @@ export default function SeekerHome() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.name}>{profile?.name || 'User'}</Text>
+            <Text style={styles.greeting}>Hello,</Text>
+            <Text style={styles.name}>{profile?.name || 'Owner'}</Text>
           </View>
           <Pressable
             style={styles.avatarContainer}
@@ -87,15 +98,43 @@ export default function SeekerHome() {
           </Pressable>
         </View>
 
-        <View style={styles.searchCard}>
-          <Image
-            source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f50d.svg' }}
-            style={styles.searchIcon}
-          />
-          <Text style={styles.searchPlaceholder}>
-            Search for homes near you...
-          </Text>
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>0</Text>
+            <Text style={styles.statLabel}>Active Listings</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>0</Text>
+            <Text style={styles.statLabel}>Total Views</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>0</Text>
+            <Text style={styles.statLabel}>Interested</Text>
+          </View>
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.createButton,
+            pressed && styles.createButtonPressed,
+          ]}
+          onPress={navigateToCreateListing}
+        >
+          <LinearGradient
+            colors={['#007AFF', '#0051D5']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.createGradient}
+          >
+            <Image
+              source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/2795.svg' }}
+              style={styles.createIcon}
+            />
+            <Text style={styles.createText}>Create New Listing</Text>
+          </LinearGradient>
+        </Pressable>
       </View>
 
       <View style={styles.section}>
@@ -107,12 +146,12 @@ export default function SeekerHome() {
           >
             <View style={styles.actionIconContainer}>
               <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4cd.svg' }}
+                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4cb.svg' }}
                 style={styles.actionIcon}
               />
             </View>
-            <Text style={styles.actionTitle}>Nearby</Text>
-            <Text style={styles.actionSubtitle}>Find homes</Text>
+            <Text style={styles.actionTitle}>My Listings</Text>
+            <Text style={styles.actionSubtitle}>View all</Text>
           </Pressable>
 
           <Pressable
@@ -121,12 +160,12 @@ export default function SeekerHome() {
           >
             <View style={styles.actionIconContainer}>
               <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f5fa.svg' }}
+                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4ca.svg' }}
                 style={styles.actionIcon}
               />
             </View>
-            <Text style={styles.actionTitle}>Map View</Text>
-            <Text style={styles.actionSubtitle}>Browse map</Text>
+            <Text style={styles.actionTitle}>Analytics</Text>
+            <Text style={styles.actionSubtitle}>View stats</Text>
           </Pressable>
 
           <Pressable
@@ -135,17 +174,17 @@ export default function SeekerHome() {
           >
             <View style={styles.actionIconContainer}>
               <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4b0.svg' }}
+                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4ac.svg' }}
                 style={styles.actionIcon}
               />
             </View>
-            <Text style={styles.actionTitle}>Budget</Text>
-            <Text style={styles.actionSubtitle}>Set range</Text>
+            <Text style={styles.actionTitle}>Messages</Text>
+            <Text style={styles.actionSubtitle}>0 new</Text>
           </Pressable>
 
           <Pressable
             style={styles.actionCard}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            onPress={navigateToNotificationSettings}
           >
             <View style={styles.actionIconContainer}>
               <Image
@@ -153,27 +192,38 @@ export default function SeekerHome() {
                 style={styles.actionIcon}
               />
             </View>
-            <Text style={styles.actionTitle}>Alerts</Text>
-            <Text style={styles.actionSubtitle}>Manage</Text>
+            <Text style={styles.actionTitle}>Notifications</Text>
+            <Text style={styles.actionSubtitle}>Settings</Text>
           </Pressable>
         </View>
       </View>
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Listings</Text>
+          <Text style={styles.sectionTitle}>Your Listings</Text>
           <Text style={styles.sectionLink}>See all</Text>
         </View>
         
         <View style={styles.emptyState}>
           <Image
-            source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f3d8.svg' }}
+            source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f3e1.svg' }}
             style={styles.emptyIcon}
           />
           <Text style={styles.emptyTitle}>No listings yet</Text>
           <Text style={styles.emptySubtitle}>
-            New properties will appear here when owners post them
+            Create your first listing to start connecting with seekers
           </Text>
+        </View>
+      </View>
+
+      <View style={styles.infoCard}>
+        <Image
+          source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4de.svg' }}
+          style={styles.infoIcon}
+        />
+        <View style={styles.infoContent}>
+          <Text style={styles.infoTitle}>Contact Number</Text>
+          <Text style={styles.infoText}>{profile?.phone || 'Not set'}</Text>
         </View>
       </View>
 
@@ -240,27 +290,61 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
   },
-  searchCard: {
+  statsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    alignItems: 'center',
   },
-  searchIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 12,
+  statNumber: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 4,
   },
-  searchPlaceholder: {
-    flex: 1,
-    fontSize: 15,
-    color: '#9CA3AF',
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
   },
   section: {
     padding: 20,
+  },
+  createButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  createGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    gap: 12,
+  },
+  createButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
+  createIcon: {
+    width: 24,
+    height: 24,
+  },
+  createText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -339,6 +423,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
+  },
+  infoCard: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  infoIcon: {
+    width: 32,
+    height: 32,
+    marginRight: 16,
+  },
+  infoContent: {
+    flex: 1,
+  },
+  infoTitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  infoText: {
+    fontSize: 16,
+    color: '#111827',
+    fontWeight: '700',
   },
   signOutButton: {
     marginHorizontal: 20,

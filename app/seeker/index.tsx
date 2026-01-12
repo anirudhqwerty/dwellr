@@ -54,6 +54,11 @@ export default function SeekerHome() {
     router.replace('/(auth)/login');
   };
 
+  const navigateToNotificationSettings = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('./(tabs)/notifications');
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -145,7 +150,7 @@ export default function SeekerHome() {
 
           <Pressable
             style={styles.actionCard}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            onPress={navigateToNotificationSettings}
           >
             <View style={styles.actionIconContainer}>
               <Image
@@ -154,7 +159,7 @@ export default function SeekerHome() {
               />
             </View>
             <Text style={styles.actionTitle}>Alerts</Text>
-            <Text style={styles.actionSubtitle}>Manage</Text>
+            <Text style={styles.actionSubtitle}>Settings</Text>
           </Pressable>
         </View>
       </View>
