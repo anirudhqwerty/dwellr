@@ -7,13 +7,13 @@ import {
   Alert,
   StyleSheet,
   ActivityIndicator,
-  Image,
   ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function CompleteProfile() {
   const [name, setName] = useState('');
@@ -74,11 +74,7 @@ export default function CompleteProfile() {
     >
       <View style={styles.header}>
         <View style={styles.iconContainer}>
-          <Image
-            source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f464.svg' }}
-            style={styles.icon}
-            resizeMode="contain"
-          />
+          <Ionicons name="person-circle" size={60} color="#007AFF" />
         </View>
         <Text style={styles.title}>Complete Your Profile</Text>
         <Text style={styles.subtitle}>
@@ -90,10 +86,7 @@ export default function CompleteProfile() {
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Full Name</Text>
           <View style={styles.inputWrapper}>
-            <Image
-              source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/270f.svg' }}
-              style={styles.inputIcon}
-            />
+            <Ionicons name="person-outline" size={20} color="#6B7280" style={{ marginRight: 12 }} />
             <TextInput
               placeholder="Enter your name"
               placeholderTextColor="#9CA3AF"
@@ -118,9 +111,10 @@ export default function CompleteProfile() {
               }}
             >
               <View style={styles.roleContent}>
-                <Image
-                  source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f50d.svg' }}
-                  style={styles.roleIcon}
+                <Ionicons 
+                  name="search" 
+                  size={32} 
+                  color={role === 'seeker' ? '#007AFF' : '#9CA3AF'} 
                 />
                 <Text style={[
                   styles.roleText,
@@ -145,9 +139,10 @@ export default function CompleteProfile() {
               }}
             >
               <View style={styles.roleContent}>
-                <Image
-                  source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f3e0.svg' }}
-                  style={styles.roleIcon}
+                <Ionicons 
+                  name="home" 
+                  size={32} 
+                  color={role === 'owner' ? '#007AFF' : '#9CA3AF'} 
                 />
                 <Text style={[
                   styles.roleText,
@@ -167,10 +162,7 @@ export default function CompleteProfile() {
           <View style={[styles.inputContainer, styles.fadeIn]}>
             <Text style={styles.label}>Phone Number</Text>
             <View style={styles.inputWrapper}>
-              <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4f1.svg' }}
-                style={styles.inputIcon}
-              />
+              <Ionicons name="call-outline" size={20} color="#6B7280" style={{ marginRight: 12 }} />
               <TextInput
                 placeholder="Your contact number"
                 placeholderTextColor="#9CA3AF"
@@ -240,10 +232,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 5,
   },
-  icon: {
-    width: 44,
-    height: 44,
-  },
   title: {
     fontSize: 28,
     fontWeight: '800',
@@ -280,11 +268,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 56,
   },
-  inputIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 12,
-  },
   input: {
     flex: 1,
     fontSize: 16,
@@ -317,15 +300,11 @@ const styles = StyleSheet.create({
   roleContent: {
     alignItems: 'center',
   },
-  roleIcon: {
-    width: 32,
-    height: 32,
-    marginBottom: 8,
-  },
   roleText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#374151',
+    marginTop: 8,
     marginBottom: 4,
   },
   roleTextSelected: {

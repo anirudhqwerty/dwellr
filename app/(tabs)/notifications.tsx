@@ -8,6 +8,7 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { router } from 'expo-router';
@@ -24,27 +25,13 @@ export default function NotificationSettings() {
   const [radius, setRadius] = useState(15); // in km
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [manualLat, setManualLat] = useState('');
+  const [manualLong, setManualLong] = useState('');
+  const [locationMethod, setLocationMethod] = useState<'auto' | 'manual'>('manual');
 
   useEffect(() => {
     loadSettings();
-    requestPermissions();
   }, []);
-
-  const requestPermissions = async () => {
-    // Request notification permission
-    const { status: notifStatus } = await Notifications.requestPermissionsAsync();
-    
-    // Request location permission
-    const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
-    
-    if (locStatus === 'granted') {
-      const currentLocation = await Location.getCurrentPositionAsync({});
-      setLocation({
-        latitude: currentLocation.coords.latitude,
-        longitude: currentLocation.coords.longitude,
-      });
-    }
-  };
 
   const loadSettings = async () => {
     try {
@@ -62,6 +49,15 @@ export default function NotificationSettings() {
       if (profileData?.notification_settings) {
         setNotificationsEnabled(profileData.notification_settings.enabled);
         setRadius(profileData.notification_settings.radius_km || 15);
+        
+        if (profileData.notification_settings.latitude && profileData.notification_settings.longitude) {
+          setLocation({
+            latitude: profileData.notification_settings.latitude,
+            longitude: profileData.notification_settings.longitude,
+          });
+          setManualLat(profileData.notification_settings.latitude.toString());
+          setManualLong(profileData.notification_settings.longitude.toString());
+        }
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -70,9 +66,66 @@ export default function NotificationSettings() {
     }
   };
 
+  const requestCurrentLocation = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Please grant location permission to use this feature');
+        return;
+      }
+
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      
+      const newLocation = {
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+      };
+      
+      setLocation(newLocation);
+      setManualLat(newLocation.latitude.toFixed(6));
+      setManualLong(newLocation.longitude.toFixed(6));
+      setLocationMethod('auto');
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Success', 'Location fetched successfully!');
+      
+    } catch (error: any) {
+      console.error('Error getting location:', error);
+      Alert.alert(
+        'Location Error',
+        'Unable to fetch your current location. Please enter it manually or try again.'
+      );
+    }
+  };
+
+  const handleManualLocationUpdate = () => {
+    const lat = parseFloat(manualLat);
+    const long = parseFloat(manualLong);
+
+    if (isNaN(lat) || isNaN(long)) {
+      Alert.alert('Invalid Coordinates', 'Please enter valid latitude and longitude values');
+      return;
+    }
+
+    if (lat < -90 || lat > 90 || long < -180 || long > 180) {
+      Alert.alert('Invalid Range', 'Latitude must be between -90 and 90, Longitude between -180 and 180');
+      return;
+    }
+
+    setLocation({ latitude: lat, longitude: long });
+    setLocationMethod('manual');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert('Success', 'Location updated successfully!');
+  };
+
   const saveSettings = async () => {
     if (!location && notificationsEnabled) {
-      Alert.alert('Location Required', 'Please enable location services to use notifications');
+      Alert.alert('Location Required', 'Please set your location to enable notifications');
       return;
     }
 
@@ -86,10 +139,18 @@ export default function NotificationSettings() {
       // Get or create push token
       let pushToken = null;
       if (notificationsEnabled) {
-        const token = await Notifications.getExpoPushTokenAsync({
-          projectId: 'ca3eb4ae-f7a7-4f6e-abfe-c6f4641899d2',
-        });
-        pushToken = token.data;
+        const { status } = await Notifications.requestPermissionsAsync();
+        
+        if (status === 'granted') {
+          try {
+            const token = await Notifications.getExpoPushTokenAsync({
+              projectId: 'ca3eb4ae-f7a7-4f6e-abfe-c6f4641899d2',
+            });
+            pushToken = token.data;
+          } catch (error) {
+            console.error('Error getting push token:', error);
+          }
+        }
       }
 
       // Upsert notification settings
@@ -123,17 +184,6 @@ export default function NotificationSettings() {
   const toggleNotifications = async (value: boolean) => {
     setNotificationsEnabled(value);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    if (value && !location) {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const currentLocation = await Location.getCurrentPositionAsync({});
-        setLocation({
-          latitude: currentLocation.coords.latitude,
-          longitude: currentLocation.coords.longitude,
-        });
-      }
-    }
   };
 
   if (loading) {
@@ -240,25 +290,80 @@ export default function NotificationSettings() {
             </View>
 
             <View style={styles.card}>
-              <View style={styles.locationInfo}>
-                <Ionicons name="location" size={32} color="#007AFF" style={{ marginRight: 16 }} />
-                <View style={styles.locationText}>
-                  <Text style={styles.settingTitle}>Your Location</Text>
-                  <Text style={styles.settingDescription}>
-                    {location
-                      ? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`
-                      : 'Location not available'
-                    }
-                  </Text>
+              <Text style={styles.settingTitle}>Your Location</Text>
+              <Text style={styles.settingDescription}>
+                Set your location to receive relevant notifications
+              </Text>
+              
+              <View style={styles.locationInputs}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Latitude</Text>
+                  <TextInput
+                    style={styles.locationInput}
+                    placeholder="e.g., 30.3398"
+                    placeholderTextColor="#9CA3AF"
+                    value={manualLat}
+                    onChangeText={setManualLat}
+                    keyboardType="numeric"
+                  />
+                </View>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Longitude</Text>
+                  <TextInput
+                    style={styles.locationInput}
+                    placeholder="e.g., 76.3869"
+                    placeholderTextColor="#9CA3AF"
+                    value={manualLong}
+                    onChangeText={setManualLong}
+                    keyboardType="numeric"
+                  />
                 </View>
               </View>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.updateLocationButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                onPress={handleManualLocationUpdate}
+              >
+                <Ionicons name="checkmark-circle-outline" size={20} color="#007AFF" />
+                <Text style={styles.updateLocationText}>Update Location</Text>
+              </Pressable>
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.autoLocationButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                onPress={requestCurrentLocation}
+              >
+                <Ionicons name="location" size={20} color="#FFFFFF" />
+                <Text style={styles.autoLocationText}>Use Current Location</Text>
+              </Pressable>
+
+              {location && (
+                <View style={styles.currentLocationDisplay}>
+                  <Ionicons name="location" size={16} color="#10B981" />
+                  <Text style={styles.currentLocationText}>
+                    Location set: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+                  </Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.infoCard}>
               <Ionicons name="information-circle" size={24} color="#92400E" style={{ marginRight: 12 }} />
               <Text style={styles.infoText}>
                 {profile?.role === 'seeker'
-                  ? 'You\'ll receive push notifications when new properties are listed within your selected radius from your current location.'
+                  ? 'You\'ll receive push notifications when new properties are listed within your selected radius from your set location.'
                   : 'You\'ll receive push notifications when seekers are looking for properties within your selected radius from your listings.'
                 }
               </Text>
@@ -430,12 +535,92 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     transform: [{ scale: 1.3 }],
   },
-  locationInfo: {
+  locationInputs: {
+    marginTop: 16,
+    gap: 12,
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  locationInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#111827',
+  },
+  updateLocationButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginTop: 16,
   },
-  locationText: {
+  updateLocationText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  dividerLine: {
     flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  dividerText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '600',
+    marginHorizontal: 12,
+  },
+  autoLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+    paddingVertical: 12,
+  },
+  autoLocationText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
+  currentLocationDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+  },
+  currentLocationText: {
+    fontSize: 13,
+    color: '#10B981',
+    fontWeight: '600',
   },
   infoCard: {
     backgroundColor: '#FEF3C7',

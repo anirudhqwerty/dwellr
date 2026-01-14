@@ -16,6 +16,7 @@ export default {
     },
     android: {
       package: "com.anirudh.dwellr",
+      googleServicesFile: "./google-services.json",
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY // Reads from .env

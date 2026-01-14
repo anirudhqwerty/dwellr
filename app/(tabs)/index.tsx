@@ -1,33 +1,41 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
-  Image,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
+import ListingDetailModal from '../../components/ListingDetailModal';
 
 export default function SeekerHome() {
   const [profile, setProfile] = useState<any>(null);
+  const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedListing, setSelectedListing] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
-  const loadProfile = async () => {
+  const loadData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) return;
 
+      // Load profile
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
@@ -35,8 +43,29 @@ export default function SeekerHome() {
         .single();
 
       setProfile(profileData);
+
+      // Load all active listings with owner info
+      const { data: listingsData } = await supabase
+        .from('listings')
+        .select(`
+          *,
+          owner:profiles!listings_owner_id_fkey(name, phone)
+        `)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (listingsData) {
+        // Flatten owner data
+        const formattedListings = listingsData.map((listing: any) => ({
+          ...listing,
+          owner_name: listing.owner?.name,
+          owner_phone: listing.owner?.phone,
+        }));
+        setListings(formattedListings);
+      }
     } catch (error) {
-      console.error('Error loading profile:', error);
+      console.error('Error loading data:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -45,7 +74,7 @@ export default function SeekerHome() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadProfile();
+    loadData();
   };
 
   const handleSignOut = async () => {
@@ -53,6 +82,100 @@ export default function SeekerHome() {
     await supabase.auth.signOut();
     router.replace('/(auth)/login');
   };
+
+  const navigateToNotificationSettings = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/(tabs)/notifications');
+  };
+
+  const navigateToNearby = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert('Nearby Homes', 'This feature will show properties near your location.');
+  };
+
+  const navigateToMapView = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert('Map View', 'This feature will show all properties on a map.');
+  };
+
+  const navigateToBudget = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert('Budget Filter', 'Set your budget range to filter properties.');
+  };
+
+  const navigateToSearch = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert('Search', 'Search feature coming soon!');
+  };
+
+  const navigateToAllListings = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert('All Listings', 'Viewing all available properties.');
+  };
+
+  const openListingDetail = (listing: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedListing(listing);
+    setModalVisible(true);
+  };
+
+  const handleContactOwner = async () => {
+    if (!selectedListing) return;
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'Please sign in to contact owners');
+        return;
+      }
+
+      // Navigate to conversation
+      router.push({
+        pathname: '/seeker/conversation/[id]',
+        params: {
+          id: selectedListing.owner_id,
+          listingId: selectedListing.id,
+          userName: selectedListing.owner_name || 'Owner',
+          listingTitle: selectedListing.title,
+        },
+      });
+      
+      setModalVisible(false);
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+      Alert.alert('Error', 'Failed to start conversation');
+    }
+  };
+
+  const renderListingCard = ({ item }: { item: any }) => (
+    <Pressable
+      style={({ pressed }) => [
+        styles.listingCard,
+        pressed && styles.listingCardPressed,
+      ]}
+      onPress={() => openListingDetail(item)}
+    >
+      <View style={styles.listingHeader}>
+        <Text style={styles.listingTitle}>{item.title}</Text>
+        <View style={styles.statusBadge}>
+          <Text style={styles.statusText}>ACTIVE</Text>
+        </View>
+      </View>
+      <View style={styles.listingRow}>
+        <Ionicons name="location-outline" size={16} color="#6B7280" />
+        <Text style={styles.listingAddress} numberOfLines={1}>
+          {item.address}
+        </Text>
+      </View>
+      <Text style={styles.listingPrice}>₹{item.rent?.toLocaleString()}/month</Text>
+      <View style={styles.tapHint}>
+        <Text style={styles.tapHintText}>Tap for details</Text>
+        <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+      </View>
+    </Pressable>
+  );
 
   if (loading) {
     return (
@@ -63,124 +186,130 @@ export default function SeekerHome() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.name}>{profile?.name || 'User'}</Text>
+    <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.greeting}>Welcome back,</Text>
+              <Text style={styles.name}>{profile?.name || 'User'}</Text>
+            </View>
+            <Pressable
+              style={styles.avatarContainer}
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            >
+              <Ionicons name="person" size={24} color="#007AFF" />
+            </Pressable>
           </View>
+
           <Pressable
-            style={styles.avatarContainer}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            style={styles.searchCard}
+            onPress={navigateToSearch}
           >
-            <Image
-              source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f464.svg' }}
-              style={styles.avatar}
-            />
+            <Ionicons name="search" size={20} color="#9CA3AF" style={{ marginRight: 12 }} />
+            <Text style={styles.searchPlaceholder}>
+              Search for homes near you...
+            </Text>
           </Pressable>
         </View>
 
-        <View style={styles.searchCard}>
-          <Image
-            source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f50d.svg' }}
-            style={styles.searchIcon}
-          />
-          <Text style={styles.searchPlaceholder}>
-            Search for homes near you...
-          </Text>
-        </View>
-      </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsGrid}>
+            <Pressable
+              style={styles.actionCard}
+              onPress={navigateToNearby}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="navigate" size={24} color="#007AFF" />
+              </View>
+              <Text style={styles.actionTitle}>Nearby</Text>
+              <Text style={styles.actionSubtitle}>Find homes</Text>
+            </Pressable>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.actionsGrid}>
-          <Pressable
-            style={styles.actionCard}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          >
-            <View style={styles.actionIconContainer}>
-              <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4cd.svg' }}
-                style={styles.actionIcon}
-              />
+            <Pressable
+              style={styles.actionCard}
+              onPress={navigateToMapView}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="map" size={24} color="#007AFF" />
+              </View>
+              <Text style={styles.actionTitle}>Map View</Text>
+              <Text style={styles.actionSubtitle}>Browse map</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.actionCard}
+              onPress={navigateToBudget}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="wallet" size={24} color="#007AFF" />
+              </View>
+              <Text style={styles.actionTitle}>Budget</Text>
+              <Text style={styles.actionSubtitle}>Set range</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.actionCard}
+              onPress={navigateToNotificationSettings}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="notifications" size={24} color="#007AFF" />
+              </View>
+              <Text style={styles.actionTitle}>Alerts</Text>
+              <Text style={styles.actionSubtitle}>Settings</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Listings</Text>
+            {listings.length > 0 && (
+              <Pressable onPress={navigateToAllListings}>
+                <Text style={styles.sectionLink}>See all</Text>
+              </Pressable>
+            )}
+          </View>
+          
+          {listings.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="home-outline" size={64} color="#D1D5DB" />
+              <Text style={styles.emptyTitle}>No listings yet</Text>
+              <Text style={styles.emptySubtitle}>
+                New properties will appear here when owners post them
+              </Text>
             </View>
-            <Text style={styles.actionTitle}>Nearby</Text>
-            <Text style={styles.actionSubtitle}>Find homes</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.actionCard}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          >
-            <View style={styles.actionIconContainer}>
-              <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f5fa.svg' }}
-                style={styles.actionIcon}
-              />
+          ) : (
+            <View>
+              {listings.map((item) => (
+                <View key={item.id} style={{ marginBottom: 12 }}>
+                  {renderListingCard({ item })}
+                </View>
+              ))}
             </View>
-            <Text style={styles.actionTitle}>Map View</Text>
-            <Text style={styles.actionSubtitle}>Browse map</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.actionCard}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          >
-            <View style={styles.actionIconContainer}>
-              <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4b0.svg' }}
-                style={styles.actionIcon}
-              />
-            </View>
-            <Text style={styles.actionTitle}>Budget</Text>
-            <Text style={styles.actionSubtitle}>Set range</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.actionCard}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          >
-            <View style={styles.actionIconContainer}>
-              <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f514.svg' }}
-                style={styles.actionIcon}
-              />
-            </View>
-            <Text style={styles.actionTitle}>Alerts</Text>
-            <Text style={styles.actionSubtitle}>Manage</Text>
-          </Pressable>
+          )}
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Listings</Text>
-          <Text style={styles.sectionLink}>See all</Text>
-        </View>
-        
-        <View style={styles.emptyState}>
-          <Image
-            source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f3d8.svg' }}
-            style={styles.emptyIcon}
-          />
-          <Text style={styles.emptyTitle}>No listings yet</Text>
-          <Text style={styles.emptySubtitle}>
-            New properties will appear here when owners post them
-          </Text>
-        </View>
-      </View>
+        <Pressable style={styles.signOutButton} onPress={handleSignOut}>
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </Pressable>
+      </ScrollView>
 
-      <Pressable style={styles.signOutButton} onPress={handleSignOut}>
-        <Text style={styles.signOutText}>Sign Out</Text>
-      </Pressable>
-    </ScrollView>
+      <ListingDetailModal
+        visible={modalVisible}
+        listing={selectedListing}
+        onClose={() => setModalVisible(false)}
+        isOwner={false}
+        onContact={handleContactOwner}
+      />
+    </>
   );
 }
 
@@ -236,10 +365,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatar: {
-    width: 28,
-    height: 28,
-  },
   searchCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -248,11 +373,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-  },
-  searchIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 12,
   },
   searchPlaceholder: {
     flex: 1,
@@ -301,10 +421,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  actionIcon: {
-    width: 24,
-    height: 24,
-  },
   actionTitle: {
     fontSize: 16,
     fontWeight: '700',
@@ -323,16 +439,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    marginBottom: 16,
-    opacity: 0.8,
-  },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#111827',
+    marginTop: 16,
     marginBottom: 8,
   },
   emptySubtitle: {
@@ -354,5 +465,67 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     fontSize: 16,
     fontWeight: '700',
+  },
+  listingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  listingCardPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
+  listingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  listingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    flex: 1,
+    marginRight: 8,
+  },
+  statusBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  listingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 4,
+  },
+  listingAddress: {
+    fontSize: 14,
+    color: '#6B7280',
+    flex: 1,
+  },
+  listingPrice: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#007AFF',
+    marginBottom: 8,
+  },
+  tapHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+  },
+  tapHintText: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
 });
