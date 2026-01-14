@@ -1,34 +1,40 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
-  Image,
   ActivityIndicator,
   RefreshControl,
+  FlatList,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons'; // Fixed: Use native vector icons
 
 export default function OwnerHome() {
   const [profile, setProfile] = useState<any>(null);
+  const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  // Load data when component mounts or screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
-  const loadProfile = async () => {
+  const loadData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) return;
 
+      // 1. Fetch Profile
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
@@ -36,8 +42,20 @@ export default function OwnerHome() {
         .single();
 
       setProfile(profileData);
+
+      // 2. Fetch Listings (Fix: Actually fetch data)
+      const { data: listingsData, error } = await supabase
+        .from('listings')
+        .select('*')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (listingsData) {
+        setListings(listingsData);
+      }
+      
     } catch (error) {
-      console.error('Error loading profile:', error);
+      console.error('Error loading data:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -46,7 +64,7 @@ export default function OwnerHome() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadProfile();
+    loadData();
   };
 
   const handleSignOut = async () => {
@@ -57,12 +75,14 @@ export default function OwnerHome() {
 
   const navigateToCreateListing = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push('./owner/create-listing');
+    // Fix: Use absolute path
+    router.push('/owner/create-listing');
   };
 
   const navigateToNotificationSettings = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('./(tabs)/notifications');
+    // Fix: Use absolute path
+    router.push('/(tabs)/notifications');
   };
 
   if (loading) {
@@ -72,6 +92,23 @@ export default function OwnerHome() {
       </View>
     );
   }
+
+  const renderListingItem = ({ item }: { item: any }) => (
+    <View style={styles.listingCard}>
+      <View style={styles.listingHeader}>
+        <Text style={styles.listingTitle}>{item.title}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: item.status === 'active' ? '#DCFCE7' : '#F3F4F6' }]}>
+          <Text style={[styles.statusText, { color: item.status === 'active' ? '#166534' : '#374151' }]}>
+            {item.status?.toUpperCase()}
+          </Text>
+        </View>
+      </View>
+      <Text style={styles.listingAddress} numberOfLines={1}>
+        <Ionicons name="location-outline" size={14} color="#6B7280" /> {item.address}
+      </Text>
+      <Text style={styles.listingPrice}>₹{item.rent}/month</Text>
+    </View>
+  );
 
   return (
     <ScrollView
@@ -91,16 +128,13 @@ export default function OwnerHome() {
             style={styles.avatarContainer}
             onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
           >
-            <Image
-              source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f464.svg' }}
-              style={styles.avatar}
-            />
+            <Ionicons name="person" size={24} color="#007AFF" />
           </Pressable>
         </View>
 
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>0</Text>
+            <Text style={styles.statNumber}>{listings.length}</Text>
             <Text style={styles.statLabel}>Active Listings</Text>
           </View>
           <View style={styles.statCard}>
@@ -128,10 +162,7 @@ export default function OwnerHome() {
             end={{ x: 1, y: 0 }}
             style={styles.createGradient}
           >
-            <Image
-              source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/2795.svg' }}
-              style={styles.createIcon}
-            />
+            <Ionicons name="add-circle-outline" size={28} color="#FFFFFF" />
             <Text style={styles.createText}>Create New Listing</Text>
           </LinearGradient>
         </Pressable>
@@ -145,10 +176,7 @@ export default function OwnerHome() {
             onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
           >
             <View style={styles.actionIconContainer}>
-              <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4cb.svg' }}
-                style={styles.actionIcon}
-              />
+              <Ionicons name="list" size={24} color="#007AFF" />
             </View>
             <Text style={styles.actionTitle}>My Listings</Text>
             <Text style={styles.actionSubtitle}>View all</Text>
@@ -159,10 +187,7 @@ export default function OwnerHome() {
             onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
           >
             <View style={styles.actionIconContainer}>
-              <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4ca.svg' }}
-                style={styles.actionIcon}
-              />
+              <Ionicons name="bar-chart" size={24} color="#007AFF" />
             </View>
             <Text style={styles.actionTitle}>Analytics</Text>
             <Text style={styles.actionSubtitle}>View stats</Text>
@@ -173,10 +198,7 @@ export default function OwnerHome() {
             onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
           >
             <View style={styles.actionIconContainer}>
-              <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4ac.svg' }}
-                style={styles.actionIcon}
-              />
+              <Ionicons name="chatbubble-ellipses" size={24} color="#007AFF" />
             </View>
             <Text style={styles.actionTitle}>Messages</Text>
             <Text style={styles.actionSubtitle}>0 new</Text>
@@ -187,10 +209,7 @@ export default function OwnerHome() {
             onPress={navigateToNotificationSettings}
           >
             <View style={styles.actionIconContainer}>
-              <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f514.svg' }}
-                style={styles.actionIcon}
-              />
+              <Ionicons name="notifications" size={24} color="#007AFF" />
             </View>
             <Text style={styles.actionTitle}>Notifications</Text>
             <Text style={styles.actionSubtitle}>Settings</Text>
@@ -201,26 +220,30 @@ export default function OwnerHome() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Your Listings</Text>
-          <Text style={styles.sectionLink}>See all</Text>
+          {listings.length > 0 && <Text style={styles.sectionLink}>See all</Text>}
         </View>
         
-        <View style={styles.emptyState}>
-          <Image
-            source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f3e1.svg' }}
-            style={styles.emptyIcon}
-          />
-          <Text style={styles.emptyTitle}>No listings yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Create your first listing to start connecting with seekers
-          </Text>
-        </View>
+        {listings.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="home-outline" size={64} color="#D1D5DB" style={{ marginBottom: 16 }} />
+            <Text style={styles.emptyTitle}>No listings yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Create your first listing to start connecting with seekers
+            </Text>
+          </View>
+        ) : (
+          <View>
+            {listings.map(item => (
+                <View key={item.id} style={{ marginBottom: 16 }}>
+                    {renderListingItem({ item })}
+                </View>
+            ))}
+          </View>
+        )}
       </View>
 
       <View style={styles.infoCard}>
-        <Image
-          source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4de.svg' }}
-          style={styles.infoIcon}
-        />
+        <Ionicons name="call" size={24} color="#007AFF" style={{ marginRight: 16 }} />
         <View style={styles.infoContent}>
           <Text style={styles.infoTitle}>Contact Number</Text>
           <Text style={styles.infoText}>{profile?.phone || 'Not set'}</Text>
@@ -286,10 +309,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatar: {
-    width: 28,
-    height: 28,
-  },
   statsContainer: {
     flexDirection: 'row',
     gap: 12,
@@ -337,10 +356,6 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
     opacity: 0.9,
   },
-  createIcon: {
-    width: 24,
-    height: 24,
-  },
   createText: {
     color: '#FFFFFF',
     fontSize: 18,
@@ -385,10 +400,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  actionIcon: {
-    width: 24,
-    height: 24,
-  },
   actionTitle: {
     fontSize: 16,
     fontWeight: '700',
@@ -406,12 +417,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-  },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    marginBottom: 16,
-    opacity: 0.8,
   },
   emptyTitle: {
     fontSize: 18,
@@ -434,11 +439,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
-  },
-  infoIcon: {
-    width: 32,
-    height: 32,
-    marginRight: 16,
   },
   infoContent: {
     flex: 1,
@@ -468,5 +468,44 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     fontSize: 16,
     fontWeight: '700',
+  },
+  listingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  listingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  listingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    flex: 1,
+    marginRight: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  listingAddress: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  listingPrice: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#007AFF',
   },
 });

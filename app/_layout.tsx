@@ -32,6 +32,7 @@ export default function RootLayout() {
 
     if (!session) {
       if (!inAuthGroup) {
+        // Only redirect to login if not already there
         router.replace('/(auth)/login');
       }
     } else {
@@ -48,11 +49,20 @@ export default function RootLayout() {
         .maybeSingle();
 
       if (!profile) {
-        router.replace('/complete-profile');
+        // Fix: Only redirect if not already on 'complete-profile'
+        if (segments[0] !== 'complete-profile') {
+          router.replace('/complete-profile');
+        }
       } else if (profile.role === 'owner') {
-        router.replace('/owner');
+        // Fix: Only redirect if not already in the 'owner' section
+        if (segments[0] !== 'owner') {
+          router.replace('/owner');
+        }
       } else if (profile.role === 'seeker') {
-        router.replace('/(tabs)');
+        // Fix: Only redirect if not already in the '(tabs)' section
+        if (segments[0] !== '(tabs)') {
+          router.replace('/(tabs)');
+        }
       }
     } catch (e) {
       console.log('Error checking role:', e);
@@ -69,7 +79,8 @@ export default function RootLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" />
+      {/* Fix: Point explicitly to the login screen, not the group folder */}
+      <Stack.Screen name="(auth)/login" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="owner/index" />
       <Stack.Screen name="seeker/index" />

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,15 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
-  Platform,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
+// FIX: Import from 'legacy' to use readAsStringAsync without errors
+import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -25,45 +28,96 @@ export default function CreateListing() {
   const [description, setDescription] = useState('');
   const [rent, setRent] = useState('');
   const [address, setAddress] = useState('');
+  const [images, setImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [isMapReady, setIsMapReady] = useState(false);
   
   const [location, setLocation] = useState({
-    latitude: 30.3398, // Default to Patiala
+    latitude: 30.3398,
     longitude: 76.3869,
+    latitudeDelta: 0.005,
+    longitudeDelta: 0.005,
   });
   
   const mapRef = useRef<MapView>(null);
   const searchTimeout = useRef<any>(null);
 
-  useEffect(() => {
-    requestLocationPermission();
-  }, []);
+  // --- IMAGE PICKER LOGIC ---
+  const pickImages = async () => {
+    if (images.length >= 5) {
+      Alert.alert('Limit Reached', 'You can only add up to 5 images.');
+      return;
+    }
 
-  const requestLocationPermission = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status === 'granted') {
-      const currentLocation = await Location.getCurrentPositionAsync({});
-      setLocation({
-        latitude: currentLocation.coords.latitude,
-        longitude: currentLocation.coords.longitude,
-      });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      // FIX: Use string literal array to avoid Enum errors
+      mediaTypes: ['images'], 
+      allowsMultipleSelection: true,
+      selectionLimit: 5 - images.length,
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      const newUris = result.assets.map((asset) => asset.uri);
+      setImages((prev) => [...prev, ...newUris].slice(0, 5));
     }
   };
 
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // --- ROBUST UPLOAD LOGIC ---
+  const uploadImages = async (userId: string) => {
+    const uploadedUrls: string[] = [];
+
+    for (const uri of images) {
+      try {
+        const fileExt = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+        const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        // FIX: Using legacy FileSystem with 'base64' string literal
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: 'base64',
+        });
+
+        // Convert Base64 to ArrayBuffer and Upload
+        const { error: uploadError } = await supabase.storage
+          .from('listing-images')
+          .upload(fileName, decode(base64), {
+            contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage
+          .from('listing-images')
+          .getPublicUrl(fileName);
+        
+        uploadedUrls.push(data.publicUrl);
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        throw new Error('Failed to upload images. Please check your internet connection.');
+      }
+    }
+    return uploadedUrls;
+  };
+
+  // --- MAP & ADDRESS LOGIC ---
   const searchPlaces = async (query: string) => {
     setAddress(query);
-    
     if (!query || query.length < 3) {
       setSearchResults([]);
       return;
     }
-
-    if (searchTimeout.current) {
-      clearTimeout(searchTimeout.current);
-    }
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
 
     searchTimeout.current = setTimeout(async () => {
       setSearching(true);
@@ -73,12 +127,8 @@ export default function CreateListing() {
             query
           )}&key=${GOOGLE_MAPS_API_KEY}&components=country:in`
         );
-        
         const data = await response.json();
-        
-        if (data.predictions) {
-          setSearchResults(data.predictions);
-        }
+        if (data.predictions) setSearchResults(data.predictions);
       } catch (error) {
         console.error('Search error:', error);
       } finally {
@@ -92,35 +142,50 @@ export default function CreateListing() {
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${GOOGLE_MAPS_API_KEY}`
       );
-      
       const data = await response.json();
-      
       if (data.result?.geometry?.location) {
         const { lat, lng } = data.result.geometry.location;
-        
-        setLocation({
+        const newLocation = {
           latitude: lat,
           longitude: lng,
-        });
-        
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
+        };
+        setLocation(newLocation);
         setAddress(description);
         setSearchResults([]);
         setShowMap(true);
-        
-        // Animate map to new location
-        mapRef.current?.animateToRegion({
-          latitude: lat,
-          longitude: lng,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 1000);
-        
+        mapRef.current?.animateToRegion(newLocation, 1000);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (error) {
-      console.error('Place details error:', error);
       Alert.alert('Error', 'Could not get location details');
     }
+  };
+
+  const reverseGeocode = async (latitude: number, longitude: number) => {
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`
+      );
+      const data = await response.json();
+      if (data.results && data.results.length > 0) {
+        setAddress(data.results[0].formatted_address);
+      }
+    } catch (error) {
+      console.log('Reverse geocoding failed', error);
+    }
+  };
+
+  const onRegionChangeComplete = (region: Region) => {
+    if (!showMap || !isMapReady) return;
+    setLocation({
+      latitude: region.latitude,
+      longitude: region.longitude,
+      latitudeDelta: region.latitudeDelta,
+      longitudeDelta: region.longitudeDelta,
+    });
+    reverseGeocode(region.latitude, region.longitude);
   };
 
   const handleSubmit = async () => {
@@ -130,12 +195,20 @@ export default function CreateListing() {
       Alert.alert('Missing info', 'Please fill all required fields');
       return;
     }
+    
+    if (images.length === 0) {
+      Alert.alert('Images Required', 'Please add at least one image of the property.');
+      return;
+    }
 
     setLoading(true);
+    setUploading(true);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not found');
+
+      const uploadedImageUrls = await uploadImages(user.id);
 
       const { error } = await supabase.from('listings').insert({
         owner_id: user.id,
@@ -146,6 +219,7 @@ export default function CreateListing() {
         latitude: location.latitude,
         longitude: location.longitude,
         status: 'active',
+        images: uploadedImageUrls,
       });
 
       if (error) throw error;
@@ -156,24 +230,22 @@ export default function CreateListing() {
       ]);
 
     } catch (err: any) {
+      console.error(err);
       Alert.alert('Error', err.message ?? 'Something went wrong');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
+      setUploading(false);
     }
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>← Back</Text>
         </Pressable>
         <Text style={styles.headerTitle}>Create Listing</Text>
-        <View style={styles.placeholder} />
+        <View style={{ width: 60 }} />
       </View>
 
       <ScrollView
@@ -181,6 +253,27 @@ export default function CreateListing() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Property Images ({images.length}/5)</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagesScroll}>
+            {images.map((uri, index) => (
+              <View key={index} style={styles.imageWrapper}>
+                <Image source={{ uri }} style={styles.thumbnail} />
+                <Pressable onPress={() => removeImage(index)} style={styles.removeBtn}>
+                  <Ionicons name="close-circle" size={24} color="#DC2626" />
+                </Pressable>
+              </View>
+            ))}
+            
+            {images.length < 5 && (
+              <Pressable onPress={pickImages} style={styles.addImageBtn}>
+                <Ionicons name="camera-outline" size={32} color="#007AFF" />
+                <Text style={styles.addImageText}>Add Photo</Text>
+              </Pressable>
+            )}
+          </ScrollView>
+        </View>
+
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Property Title</Text>
           <View style={styles.inputWrapper}>
@@ -226,10 +319,7 @@ export default function CreateListing() {
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Address</Text>
           <View style={styles.inputWrapper}>
-            <Image
-              source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4cd.svg' }}
-              style={styles.inputIcon}
-            />
+            <Ionicons name="location-outline" size={20} color="#6B7280" style={{ marginRight: 10 }} />
             <TextInput
               placeholder="Search for your address..."
               placeholderTextColor="#9CA3AF"
@@ -237,11 +327,8 @@ export default function CreateListing() {
               value={address}
               onChangeText={searchPlaces}
             />
-            {searching && (
-              <ActivityIndicator size="small" color="#007AFF" />
-            )}
+            {searching && <ActivityIndicator size="small" color="#007AFF" />}
           </View>
-          
           {searchResults.length > 0 && (
             <View style={styles.searchResults}>
               {searchResults.map((result) => (
@@ -250,10 +337,7 @@ export default function CreateListing() {
                   style={styles.searchResultItem}
                   onPress={() => selectPlace(result.place_id, result.description)}
                 >
-                  <Image
-                    source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4cd.svg' }}
-                    style={styles.resultIcon}
-                  />
+                  <Ionicons name="location-sharp" size={16} color="#6B7280" style={{ marginRight: 10 }} />
                   <Text style={styles.searchResultText}>{result.description}</Text>
                 </Pressable>
               ))}
@@ -269,23 +353,15 @@ export default function CreateListing() {
                 ref={mapRef}
                 provider={PROVIDER_GOOGLE}
                 style={styles.map}
-                initialRegion={{
-                  latitude: location.latitude,
-                  longitude: location.longitude,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }}
-              >
-                <Marker
-                  coordinate={location}
-                  title={title || 'Your Property'}
-                  description={address}
-                />
-              </MapView>
+                initialRegion={location}
+                onMapReady={() => setIsMapReady(true)}
+                onRegionChangeComplete={onRegionChangeComplete}
+              />
+              <View style={styles.markerFixed}>
+                <Ionicons name="location-sharp" size={40} color="#EA4335" />
+              </View>
             </View>
-            <Text style={styles.mapHint}>
-              📍 Drag the map to adjust the marker position
-            </Text>
+            <Text style={styles.mapHint}>📍 Move map to pin exact location</Text>
           </View>
         )}
 
@@ -304,7 +380,10 @@ export default function CreateListing() {
             style={styles.submitGradient}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.submitText}>{uploading ? 'Uploading Images...' : 'Creating...'}</Text>
+              </View>
             ) : (
               <Text style={styles.submitText}>Create Listing</Text>
             )}
@@ -316,149 +395,49 @@ export default function CreateListing() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
   },
-  backButton: {
-    padding: 8,
-  },
-  backText: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  placeholder: {
-    width: 60,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  inputContainer: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#374151',
-  },
+  backButton: { padding: 8 },
+  backText: { fontSize: 16, color: '#007AFF', fontWeight: '600' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  scrollView: { flex: 1 },
+  content: { padding: 20, paddingBottom: 40 },
+  inputContainer: { marginBottom: 24 },
+  label: { fontSize: 14, fontWeight: '600', marginBottom: 8, color: '#374151' },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    minHeight: 56,
+    flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E7EB',
+    borderRadius: 12, backgroundColor: '#FFFFFF', paddingHorizontal: 16, minHeight: 56,
   },
-  textArea: {
-    minHeight: 120,
-    alignItems: 'flex-start',
-    paddingVertical: 16,
+  textArea: { minHeight: 120, alignItems: 'flex-start', paddingVertical: 16 },
+  input: { flex: 1, fontSize: 16, color: '#111827' },
+  textAreaInput: { minHeight: 100, textAlignVertical: 'top' },
+  
+  imagesScroll: { flexDirection: 'row', marginBottom: 8 },
+  imageWrapper: { marginRight: 12, position: 'relative' },
+  thumbnail: { width: 100, height: 100, borderRadius: 12, backgroundColor: '#E5E7EB' },
+  removeBtn: { position: 'absolute', top: -8, right: -8, backgroundColor: '#FFF', borderRadius: 12 },
+  addImageBtn: {
+    width: 100, height: 100, borderRadius: 12, borderWidth: 2, borderColor: '#E5E7EB', borderStyle: 'dashed',
+    justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB',
   },
-  inputIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#111827',
-  },
-  textAreaInput: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  searchResults: {
-    marginTop: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
-  searchResultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  resultIcon: {
-    width: 16,
-    height: 16,
-    marginRight: 12,
-  },
-  searchResultText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#374151',
-  },
-  mapContainer: {
-    marginBottom: 24,
-  },
-  mapWrapper: {
-    height: 250,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  map: {
-    flex: 1,
-  },
-  mapHint: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  submitButton: {
-    height: 56,
-    borderRadius: 12,
-    marginTop: 16,
-    overflow: 'hidden',
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  submitGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  submitButtonPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  submitText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 17,
-  },
+  addImageText: { fontSize: 12, color: '#007AFF', fontWeight: '600', marginTop: 4 },
+
+  searchResults: { marginTop: 8, backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden' },
+  searchResultItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  searchResultText: { flex: 1, fontSize: 14, color: '#374151' },
+  
+  mapContainer: { marginBottom: 24 },
+  mapWrapper: { height: 250, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB', position: 'relative' },
+  map: { flex: 1 },
+  markerFixed: { position: 'absolute', top: '50%', left: '50%', marginLeft: -20, marginTop: -40, pointerEvents: 'none', alignItems: 'center', justifyContent: 'center' },
+  mapHint: { fontSize: 12, color: '#6B7280', marginTop: 8, textAlign: 'center' },
+
+  submitButton: { height: 56, borderRadius: 12, marginTop: 16, overflow: 'hidden', shadowColor: '#007AFF', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  submitGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  submitButtonPressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  submitText: { color: '#FFFFFF', fontWeight: '700', fontSize: 17 },
 });
