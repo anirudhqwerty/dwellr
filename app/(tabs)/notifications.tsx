@@ -6,7 +6,6 @@ import {
   ScrollView,
   Pressable,
   Switch,
-  Image,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -16,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { supabase } from '../../lib/supabase';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function NotificationSettings() {
   const [loading, setLoading] = useState(true);
@@ -87,7 +87,7 @@ export default function NotificationSettings() {
       let pushToken = null;
       if (notificationsEnabled) {
         const token = await Notifications.getExpoPushTokenAsync({
-          projectId: 'ca3eb4ae-f7a7-4f6e-abfe-c6f4641899d2', // Your EAS project ID
+          projectId: 'ca3eb4ae-f7a7-4f6e-abfe-c6f4641899d2',
         });
         pushToken = token.data;
       }
@@ -148,7 +148,7 @@ export default function NotificationSettings() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>← Back</Text>
+          <Ionicons name="arrow-back" size={24} color="#007AFF" />
         </Pressable>
         <Text style={styles.headerTitle}>Notifications</Text>
         <View style={styles.placeholder} />
@@ -157,10 +157,7 @@ export default function NotificationSettings() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <View style={styles.section}>
           <View style={styles.iconContainer}>
-            <Image
-              source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f514.svg' }}
-              style={styles.headerIcon}
-            />
+            <Ionicons name="notifications" size={40} color="#007AFF" />
           </View>
           <Text style={styles.sectionTitle}>Stay Updated</Text>
           <Text style={styles.sectionSubtitle}>
@@ -244,10 +241,7 @@ export default function NotificationSettings() {
 
             <View style={styles.card}>
               <View style={styles.locationInfo}>
-                <Image
-                  source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f4cd.svg' }}
-                  style={styles.locationIcon}
-                />
+                <Ionicons name="location" size={32} color="#007AFF" style={{ marginRight: 16 }} />
                 <View style={styles.locationText}>
                   <Text style={styles.settingTitle}>Your Location</Text>
                   <Text style={styles.settingDescription}>
@@ -261,10 +255,7 @@ export default function NotificationSettings() {
             </View>
 
             <View style={styles.infoCard}>
-              <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/2139.svg' }}
-                style={styles.infoIcon}
-              />
+              <Ionicons name="information-circle" size={24} color="#92400E" style={{ marginRight: 12 }} />
               <Text style={styles.infoText}>
                 {profile?.role === 'seeker'
                   ? 'You\'ll receive push notifications when new properties are listed within your selected radius from your current location.'
@@ -318,11 +309,6 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
-  backText: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
@@ -350,10 +336,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
-  },
-  headerIcon: {
-    width: 40,
-    height: 40,
   },
   sectionTitle: {
     fontSize: 24,
@@ -452,11 +434,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  locationIcon: {
-    width: 32,
-    height: 32,
-    marginRight: 16,
-  },
   locationText: {
     flex: 1,
   },
@@ -469,12 +446,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderWidth: 1,
     borderColor: '#FDE68A',
-  },
-  infoIcon: {
-    width: 24,
-    height: 24,
-    marginRight: 12,
-    marginTop: 2,
   },
   infoText: {
     flex: 1,

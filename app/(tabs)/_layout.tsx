@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function TabLayout() {
   return (
@@ -28,14 +28,10 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, focused }) => (
-            <Image
-              source={{ 
-                uri: focused 
-                  ? 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f3e0.svg'
-                  : 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f3e0.svg'
-              }}
-              style={{ width: 24, height: 24, opacity: focused ? 1 : 0.5 }}
-              resizeMode="contain"
+            <Ionicons 
+              name={focused ? 'home' : 'home-outline'} 
+              size={24} 
+              color={color} 
             />
           ),
         }}
@@ -45,14 +41,10 @@ export default function TabLayout() {
         options={{
           title: 'Saved',
           tabBarIcon: ({ color, focused }) => (
-            <Image
-              source={{ 
-                uri: focused
-                  ? 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/2764.svg'
-                  : 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f90d.svg'
-              }}
-              style={{ width: 24, height: 24, opacity: focused ? 1 : 0.5 }}
-              resizeMode="contain"
+            <Ionicons 
+              name={focused ? 'heart' : 'heart-outline'} 
+              size={24} 
+              color={color} 
             />
           ),
         }}

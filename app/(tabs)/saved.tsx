@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function SavedScreen() {
   return (
@@ -9,10 +10,7 @@ export default function SavedScreen() {
       </View>
 
       <View style={styles.emptyState}>
-        <Image
-          source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f494.svg' }}
-          style={styles.emptyIcon}
-        />
+        <Ionicons name="heart-dislike-outline" size={80} color="#D1D5DB" />
         <Text style={styles.emptyTitle}>No saved homes yet</Text>
         <Text style={styles.emptySubtitle}>
           When you find a home you like, tap the heart icon to save it here
@@ -61,16 +59,11 @@ const styles = StyleSheet.create({
     padding: 40,
     marginTop: 80,
   },
-  emptyIcon: {
-    width: 80,
-    height: 80,
-    marginBottom: 24,
-    opacity: 0.8,
-  },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#111827',
+    marginTop: 24,
     marginBottom: 8,
   },
   emptySubtitle: {

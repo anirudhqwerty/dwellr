@@ -7,21 +7,23 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
-  FlatList,
+  Alert,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons'; // Fixed: Use native vector icons
+import { Ionicons } from '@expo/vector-icons';
+import ListingDetailModal from '../../components/ListingDetailModal';
 
 export default function OwnerHome() {
   const [profile, setProfile] = useState<any>(null);
   const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedListing, setSelectedListing] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
-  // Load data when component mounts or screen comes into focus
   useFocusEffect(
     useCallback(() => {
       loadData();
@@ -34,7 +36,6 @@ export default function OwnerHome() {
       
       if (!user) return;
 
-      // 1. Fetch Profile
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
@@ -43,8 +44,7 @@ export default function OwnerHome() {
 
       setProfile(profileData);
 
-      // 2. Fetch Listings (Fix: Actually fetch data)
-      const { data: listingsData, error } = await supabase
+      const { data: listingsData } = await supabase
         .from('listings')
         .select('*')
         .eq('owner_id', user.id)
@@ -75,14 +75,57 @@ export default function OwnerHome() {
 
   const navigateToCreateListing = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Fix: Use absolute path
     router.push('/owner/create-listing');
+  };
+
+  const navigateToMyListings = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/owner/listings');
+  };
+
+  const navigateToAnalytics = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/owner/analytics');
+  };
+
+  const navigateToMessages = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/owner/messages');
   };
 
   const navigateToNotificationSettings = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Fix: Use absolute path
     router.push('/(tabs)/notifications');
+  };
+
+  const openListingDetail = (listing: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedListing(listing);
+    setModalVisible(true);
+  };
+
+  const handleEditListing = () => {
+    // TODO: Navigate to edit screen
+    Alert.alert('Edit Listing', 'Edit functionality coming soon!');
+  };
+
+  const handleDeleteListing = async () => {
+    if (!selectedListing) return;
+
+    try {
+      const { error } = await supabase
+        .from('listings')
+        .delete()
+        .eq('id', selectedListing.id);
+
+      if (error) throw error;
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Success', 'Listing deleted successfully');
+      loadData();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to delete listing');
+    }
   };
 
   if (loading) {
@@ -94,7 +137,13 @@ export default function OwnerHome() {
   }
 
   const renderListingItem = ({ item }: { item: any }) => (
-    <View style={styles.listingCard}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.listingCard,
+        pressed && styles.listingCardPressed,
+      ]}
+      onPress={() => openListingDetail(item)}
+    >
       <View style={styles.listingHeader}>
         <Text style={styles.listingTitle}>{item.title}</Text>
         <View style={[styles.statusBadge, { backgroundColor: item.status === 'active' ? '#DCFCE7' : '#F3F4F6' }]}>
@@ -107,153 +156,172 @@ export default function OwnerHome() {
         <Ionicons name="location-outline" size={14} color="#6B7280" /> {item.address}
       </Text>
       <Text style={styles.listingPrice}>₹{item.rent}/month</Text>
-    </View>
+      <View style={styles.tapHint}>
+        <Text style={styles.tapHintText}>Tap to view details</Text>
+        <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+      </View>
+    </Pressable>
   );
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.greeting}>Hello,</Text>
-            <Text style={styles.name}>{profile?.name || 'Owner'}</Text>
+    <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.greeting}>Hello,</Text>
+              <Text style={styles.name}>{profile?.name || 'Owner'}</Text>
+            </View>
+            <Pressable
+              style={styles.avatarContainer}
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            >
+              <Ionicons name="person" size={24} color="#007AFF" />
+            </Pressable>
           </View>
+
+          <View style={styles.statsContainer}>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{listings.length}</Text>
+              <Text style={styles.statLabel}>Active Listings</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statLabel}>Total Views</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statLabel}>Interested</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
           <Pressable
-            style={styles.avatarContainer}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            style={({ pressed }) => [
+              styles.createButton,
+              pressed && styles.createButtonPressed,
+            ]}
+            onPress={navigateToCreateListing}
           >
-            <Ionicons name="person" size={24} color="#007AFF" />
+            <LinearGradient
+              colors={['#007AFF', '#0051D5']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.createGradient}
+            >
+              <Ionicons name="add-circle-outline" size={28} color="#FFFFFF" />
+              <Text style={styles.createText}>Create New Listing</Text>
+            </LinearGradient>
           </Pressable>
         </View>
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{listings.length}</Text>
-            <Text style={styles.statLabel}>Active Listings</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>Total Views</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>Interested</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsGrid}>
+            <Pressable
+              style={styles.actionCard}
+              onPress={navigateToMyListings}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="list" size={24} color="#007AFF" />
+              </View>
+              <Text style={styles.actionTitle}>My Listings</Text>
+              <Text style={styles.actionSubtitle}>View all</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.actionCard}
+              onPress={navigateToAnalytics}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="bar-chart" size={24} color="#007AFF" />
+              </View>
+              <Text style={styles.actionTitle}>Analytics</Text>
+              <Text style={styles.actionSubtitle}>View stats</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.actionCard}
+              onPress={navigateToMessages}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="chatbubble-ellipses" size={24} color="#007AFF" />
+              </View>
+              <Text style={styles.actionTitle}>Messages</Text>
+              <Text style={styles.actionSubtitle}>0 new</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.actionCard}
+              onPress={navigateToNotificationSettings}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="notifications" size={24} color="#007AFF" />
+              </View>
+              <Text style={styles.actionTitle}>Notifications</Text>
+              <Text style={styles.actionSubtitle}>Settings</Text>
+            </Pressable>
           </View>
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.createButton,
-            pressed && styles.createButtonPressed,
-          ]}
-          onPress={navigateToCreateListing}
-        >
-          <LinearGradient
-            colors={['#007AFF', '#0051D5']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.createGradient}
-          >
-            <Ionicons name="add-circle-outline" size={28} color="#FFFFFF" />
-            <Text style={styles.createText}>Create New Listing</Text>
-          </LinearGradient>
-        </Pressable>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.actionsGrid}>
-          <Pressable
-            style={styles.actionCard}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          >
-            <View style={styles.actionIconContainer}>
-              <Ionicons name="list" size={24} color="#007AFF" />
-            </View>
-            <Text style={styles.actionTitle}>My Listings</Text>
-            <Text style={styles.actionSubtitle}>View all</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.actionCard}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          >
-            <View style={styles.actionIconContainer}>
-              <Ionicons name="bar-chart" size={24} color="#007AFF" />
-            </View>
-            <Text style={styles.actionTitle}>Analytics</Text>
-            <Text style={styles.actionSubtitle}>View stats</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.actionCard}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          >
-            <View style={styles.actionIconContainer}>
-              <Ionicons name="chatbubble-ellipses" size={24} color="#007AFF" />
-            </View>
-            <Text style={styles.actionTitle}>Messages</Text>
-            <Text style={styles.actionSubtitle}>0 new</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.actionCard}
-            onPress={navigateToNotificationSettings}
-          >
-            <View style={styles.actionIconContainer}>
-              <Ionicons name="notifications" size={24} color="#007AFF" />
-            </View>
-            <Text style={styles.actionTitle}>Notifications</Text>
-            <Text style={styles.actionSubtitle}>Settings</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Your Listings</Text>
-          {listings.length > 0 && <Text style={styles.sectionLink}>See all</Text>}
-        </View>
-        
-        {listings.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="home-outline" size={64} color="#D1D5DB" style={{ marginBottom: 16 }} />
-            <Text style={styles.emptyTitle}>No listings yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Create your first listing to start connecting with seekers
-            </Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Your Listings</Text>
+            {listings.length > 0 && (
+              <Pressable onPress={navigateToMyListings}>
+                <Text style={styles.sectionLink}>See all</Text>
+              </Pressable>
+            )}
           </View>
-        ) : (
-          <View>
-            {listings.map(item => (
+          
+          {listings.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="home-outline" size={64} color="#D1D5DB" style={{ marginBottom: 16 }} />
+              <Text style={styles.emptyTitle}>No listings yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Create your first listing to start connecting with seekers
+              </Text>
+            </View>
+          ) : (
+            <View>
+              {listings.slice(0, 3).map(item => (
                 <View key={item.id} style={{ marginBottom: 16 }}>
-                    {renderListingItem({ item })}
+                  {renderListingItem({ item })}
                 </View>
-            ))}
-          </View>
-        )}
-      </View>
-
-      <View style={styles.infoCard}>
-        <Ionicons name="call" size={24} color="#007AFF" style={{ marginRight: 16 }} />
-        <View style={styles.infoContent}>
-          <Text style={styles.infoTitle}>Contact Number</Text>
-          <Text style={styles.infoText}>{profile?.phone || 'Not set'}</Text>
+              ))}
+            </View>
+          )}
         </View>
-      </View>
 
-      <Pressable style={styles.signOutButton} onPress={handleSignOut}>
-        <Text style={styles.signOutText}>Sign Out</Text>
-      </Pressable>
-    </ScrollView>
+        <View style={styles.infoCard}>
+          <Ionicons name="call" size={24} color="#007AFF" style={{ marginRight: 16 }} />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoTitle}>Contact Number</Text>
+            <Text style={styles.infoText}>{profile?.phone || 'Not set'}</Text>
+          </View>
+        </View>
+
+        <Pressable style={styles.signOutButton} onPress={handleSignOut}>
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </Pressable>
+      </ScrollView>
+
+      <ListingDetailModal
+        visible={modalVisible}
+        listing={selectedListing}
+        onClose={() => setModalVisible(false)}
+        isOwner={true}
+        onEdit={handleEditListing}
+        onDelete={handleDeleteListing}
+      />
+    </>
   );
 }
 
@@ -476,6 +544,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
+  listingCardPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
   listingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -507,5 +579,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#007AFF',
+    marginBottom: 8,
+  },
+  tapHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+  },
+  tapHintText: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
 });
