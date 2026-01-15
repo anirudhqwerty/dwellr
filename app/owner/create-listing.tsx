@@ -231,12 +231,13 @@ export default function CreateListing() {
         const notificationResult = await sendNotificationToNearbyUsers(
           newListing.id,
           {
-            title: title,
-            latitude: location.latitude,
-            longitude: location.longitude,
-            rent: parseFloat(rent),
+            title,
+            latitude: Number(location.latitude),
+            longitude: Number(location.longitude),
+            rent: Number(rent),
           }
         );
+
 
         if (notificationResult.success) {
           console.log(`✅ Notifications sent to ${notificationResult.count} users`);

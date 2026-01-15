@@ -104,7 +104,7 @@ export default function SeekerHome() {
 
   const navigateToMessages = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/seeker/messages');
+    router.push('/messages');
   };
 
   const openListingDetail = (listing: any) => {
