@@ -19,6 +19,7 @@ import ListingDetailModal from '../../components/ListingDetailModal';
 export default function OwnerHome() {
   const [profile, setProfile] = useState<any>(null);
   const [listings, setListings] = useState<any[]>([]);
+  const [totalInterested, setTotalInterested] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedListing, setSelectedListing] = useState<any>(null);
@@ -52,6 +53,10 @@ export default function OwnerHome() {
 
       if (listingsData) {
         setListings(listingsData);
+        
+        // Calculate total interested
+        const total = listingsData.reduce((sum, listing) => sum + (listing.interested_count || 0), 0);
+        setTotalInterested(total);
       }
       
     } catch (error) {
@@ -93,11 +98,6 @@ export default function OwnerHome() {
     router.push('/owner/messages');
   };
 
-  const navigateToNotificationSettings = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(tabs)/notifications');
-  };
-
   const openListingDetail = (listing: any) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedListing(listing);
@@ -105,7 +105,6 @@ export default function OwnerHome() {
   };
 
   const handleEditListing = () => {
-    // TODO: Navigate to edit screen
     Alert.alert('Edit Listing', 'Edit functionality coming soon!');
   };
 
@@ -122,6 +121,7 @@ export default function OwnerHome() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Success', 'Listing deleted successfully');
+      setModalVisible(false);
       loadData();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to delete listing');
@@ -155,7 +155,15 @@ export default function OwnerHome() {
       <Text style={styles.listingAddress} numberOfLines={1}>
         <Ionicons name="location-outline" size={14} color="#6B7280" /> {item.address}
       </Text>
-      <Text style={styles.listingPrice}>₹{item.rent}/month</Text>
+      <Text style={styles.listingPrice}>₹{item.rent?.toLocaleString()}/month</Text>
+      {item.interested_count > 0 && (
+        <View style={styles.interestedBadge}>
+          <Ionicons name="heart" size={14} color="#DC2626" />
+          <Text style={styles.interestedText}>
+            {item.interested_count} interested
+          </Text>
+        </View>
+      )}
       <View style={styles.tapHint}>
         <Text style={styles.tapHintText}>Tap to view details</Text>
         <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
@@ -192,12 +200,12 @@ export default function OwnerHome() {
               <Text style={styles.statLabel}>Active Listings</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statNumber}>0</Text>
-              <Text style={styles.statLabel}>Total Views</Text>
+              <Text style={styles.statNumber}>{totalInterested}</Text>
+              <Text style={styles.statLabel}>Interested</Text>
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statNumber}>0</Text>
-              <Text style={styles.statLabel}>Interested</Text>
+              <Text style={styles.statLabel}>Total Views</Text>
             </View>
           </View>
         </View>
@@ -257,17 +265,6 @@ export default function OwnerHome() {
               <Text style={styles.actionTitle}>Messages</Text>
               <Text style={styles.actionSubtitle}>0 new</Text>
             </Pressable>
-
-            <Pressable
-              style={styles.actionCard}
-              onPress={navigateToNotificationSettings}
-            >
-              <View style={styles.actionIconContainer}>
-                <Ionicons name="notifications" size={24} color="#007AFF" />
-              </View>
-              <Text style={styles.actionTitle}>Notifications</Text>
-              <Text style={styles.actionSubtitle}>Settings</Text>
-            </Pressable>
           </View>
         </View>
 
@@ -316,7 +313,10 @@ export default function OwnerHome() {
       <ListingDetailModal
         visible={modalVisible}
         listing={selectedListing}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          loadData(); // Refresh to get updated interested count
+        }}
         isOwner={true}
         onEdit={handleEditListing}
         onDelete={handleDeleteListing}
@@ -580,6 +580,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#007AFF',
     marginBottom: 8,
+  },
+  interestedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+  },
+  interestedText: {
+    fontSize: 13,
+    color: '#DC2626',
+    fontWeight: '600',
   },
   tapHint: {
     flexDirection: 'row',

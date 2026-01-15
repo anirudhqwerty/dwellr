@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,10 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
-  TextInput,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,13 +23,13 @@ export default function NotificationSettings() {
   const [radius, setRadius] = useState(15); // in km
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [profile, setProfile] = useState<any>(null);
-  const [manualLat, setManualLat] = useState('');
-  const [manualLong, setManualLong] = useState('');
-  const [locationMethod, setLocationMethod] = useState<'auto' | 'manual'>('manual');
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  // Use useFocusEffect to reload settings when returning from the Map screen
+  useFocusEffect(
+    useCallback(() => {
+      loadSettings();
+    }, [])
+  );
 
   const loadSettings = async () => {
     try {
@@ -55,8 +53,6 @@ export default function NotificationSettings() {
             latitude: profileData.notification_settings.latitude,
             longitude: profileData.notification_settings.longitude,
           });
-          setManualLat(profileData.notification_settings.latitude.toString());
-          setManualLong(profileData.notification_settings.longitude.toString());
         }
       }
     } catch (error) {
@@ -66,61 +62,10 @@ export default function NotificationSettings() {
     }
   };
 
-  const requestCurrentLocation = async () => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Please grant location permission to use this feature');
-        return;
-      }
-
-      const currentLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      
-      const newLocation = {
-        latitude: currentLocation.coords.latitude,
-        longitude: currentLocation.coords.longitude,
-      };
-      
-      setLocation(newLocation);
-      setManualLat(newLocation.latitude.toFixed(6));
-      setManualLong(newLocation.longitude.toFixed(6));
-      setLocationMethod('auto');
-      
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Success', 'Location fetched successfully!');
-      
-    } catch (error: any) {
-      console.error('Error getting location:', error);
-      Alert.alert(
-        'Location Error',
-        'Unable to fetch your current location. Please enter it manually or try again.'
-      );
-    }
-  };
-
-  const handleManualLocationUpdate = () => {
-    const lat = parseFloat(manualLat);
-    const long = parseFloat(manualLong);
-
-    if (isNaN(lat) || isNaN(long)) {
-      Alert.alert('Invalid Coordinates', 'Please enter valid latitude and longitude values');
-      return;
-    }
-
-    if (lat < -90 || lat > 90 || long < -180 || long > 180) {
-      Alert.alert('Invalid Range', 'Latitude must be between -90 and 90, Longitude between -180 and 180');
-      return;
-    }
-
-    setLocation({ latitude: lat, longitude: long });
-    setLocationMethod('manual');
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert('Success', 'Location updated successfully!');
+  const handleOpenMap = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Navigate to the map screen to update location
+    router.push('/seeker/update-location');
   };
 
   const saveSettings = async () => {
@@ -186,7 +131,7 @@ export default function NotificationSettings() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  if (loading) {
+  if (loading && !profile) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -295,29 +240,20 @@ export default function NotificationSettings() {
                 Set your location to receive relevant notifications
               </Text>
               
-              <View style={styles.locationInputs}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Latitude</Text>
-                  <TextInput
-                    style={styles.locationInput}
-                    placeholder="e.g., 30.3398"
-                    placeholderTextColor="#9CA3AF"
-                    value={manualLat}
-                    onChangeText={setManualLat}
-                    keyboardType="numeric"
-                  />
+              <View style={styles.locationPreview}>
+                <View style={styles.locationIcon}>
+                    <Ionicons name="location" size={24} color="#007AFF" />
                 </View>
-                
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Longitude</Text>
-                  <TextInput
-                    style={styles.locationInput}
-                    placeholder="e.g., 76.3869"
-                    placeholderTextColor="#9CA3AF"
-                    value={manualLong}
-                    onChangeText={setManualLong}
-                    keyboardType="numeric"
-                  />
+                <View style={styles.locationTextContainer}>
+                    <Text style={styles.locationLabel}>Current Location</Text>
+                    <Text style={styles.locationValue} numberOfLines={1}>
+                        {profile?.address || 'No location set'}
+                    </Text>
+                    {location && (
+                        <Text style={styles.locationCoords}>
+                            {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+                        </Text>
+                    )}
                 </View>
               </View>
 
@@ -326,37 +262,11 @@ export default function NotificationSettings() {
                   styles.updateLocationButton,
                   pressed && styles.buttonPressed,
                 ]}
-                onPress={handleManualLocationUpdate}
+                onPress={handleOpenMap}
               >
-                <Ionicons name="checkmark-circle-outline" size={20} color="#007AFF" />
-                <Text style={styles.updateLocationText}>Update Location</Text>
+                <Ionicons name="map-outline" size={20} color="#007AFF" />
+                <Text style={styles.updateLocationText}>Set on Map</Text>
               </Pressable>
-
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>OR</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <Pressable
-                style={({ pressed }) => [
-                  styles.autoLocationButton,
-                  pressed && styles.buttonPressed,
-                ]}
-                onPress={requestCurrentLocation}
-              >
-                <Ionicons name="location" size={20} color="#FFFFFF" />
-                <Text style={styles.autoLocationText}>Use Current Location</Text>
-              </Pressable>
-
-              {location && (
-                <View style={styles.currentLocationDisplay}>
-                  <Ionicons name="location" size={16} color="#10B981" />
-                  <Text style={styles.currentLocationText}>
-                    Location set: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
-                  </Text>
-                </View>
-              )}
             </View>
 
             <View style={styles.infoCard}>
@@ -535,27 +445,42 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     transform: [{ scale: 1.3 }],
   },
-  locationInputs: {
-    marginTop: 16,
-    gap: 12,
-  },
-  inputGroup: {
-    gap: 6,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  locationInput: {
+  locationPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  },
+  locationIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  locationTextContainer: {
+    flex: 1,
+  },
+  locationLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  locationValue: {
     fontSize: 15,
+    fontWeight: '600',
     color: '#111827',
+  },
+  locationCoords: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 2,
   },
   updateLocationButton: {
     flexDirection: 'row',
@@ -574,53 +499,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#007AFF',
   },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E7EB',
-  },
-  dividerText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: '600',
-    marginHorizontal: 12,
-  },
-  autoLocationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#007AFF',
-    borderRadius: 10,
-    paddingVertical: 12,
-  },
-  autoLocationText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
   buttonPressed: {
     transform: [{ scale: 0.98 }],
     opacity: 0.9,
-  },
-  currentLocationDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#ECFDF5',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 12,
-  },
-  currentLocationText: {
-    fontSize: 13,
-    color: '#10B981',
-    fontWeight: '600',
   },
   infoCard: {
     backgroundColor: '#FEF3C7',

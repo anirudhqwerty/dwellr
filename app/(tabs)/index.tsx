@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -35,7 +35,6 @@ export default function SeekerHome() {
       
       if (!user) return;
 
-      // Load profile
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
@@ -44,7 +43,6 @@ export default function SeekerHome() {
 
       setProfile(profileData);
 
-      // Load all active listings with owner info
       const { data: listingsData } = await supabase
         .from('listings')
         .select(`
@@ -56,7 +54,6 @@ export default function SeekerHome() {
         .limit(10);
 
       if (listingsData) {
-        // Flatten owner data
         const formattedListings = listingsData.map((listing: any) => ({
           ...listing,
           owner_name: listing.owner?.name,
@@ -83,70 +80,37 @@ export default function SeekerHome() {
     router.replace('/(auth)/login');
   };
 
+  const handleUpdateLocation = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/seeker/update-location');
+  };
+
   const navigateToNotificationSettings = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push('/(tabs)/notifications');
   };
 
-  const navigateToNearby = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert('Nearby Homes', 'This feature will show properties near your location.');
-  };
-
   const navigateToMapView = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert('Map View', 'This feature will show all properties on a map.');
+    router.push('/seeker/map-view');
   };
 
-  const navigateToBudget = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert('Budget Filter', 'Set your budget range to filter properties.');
-  };
 
-  const navigateToSearch = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert('Search', 'Search feature coming soon!');
-  };
 
   const navigateToAllListings = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert('All Listings', 'Viewing all available properties.');
+    router.push('/seeker/all-listings');
+  };
+
+  const navigateToMessages = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/seeker/messages');
   };
 
   const openListingDetail = (listing: any) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedListing(listing);
     setModalVisible(true);
-  };
-
-  const handleContactOwner = async () => {
-    if (!selectedListing) return;
-    
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        Alert.alert('Error', 'Please sign in to contact owners');
-        return;
-      }
-
-      // Navigate to conversation
-      router.push({
-        pathname: '/seeker/conversation/[id]',
-        params: {
-          id: selectedListing.owner_id,
-          listingId: selectedListing.id,
-          userName: selectedListing.owner_name || 'Owner',
-          listingTitle: selectedListing.title,
-        },
-      });
-      
-      setModalVisible(false);
-    } catch (error) {
-      console.error('Error starting conversation:', error);
-      Alert.alert('Error', 'Failed to start conversation');
-    }
   };
 
   const renderListingCard = ({ item }: { item: any }) => (
@@ -177,7 +141,7 @@ export default function SeekerHome() {
     </Pressable>
   );
 
-  if (loading) {
+  if (loading && !profile) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -210,11 +174,13 @@ export default function SeekerHome() {
 
           <Pressable
             style={styles.searchCard}
-            onPress={navigateToSearch}
+            onPress={handleUpdateLocation}
           >
             <Ionicons name="search" size={20} color="#9CA3AF" style={{ marginRight: 12 }} />
             <Text style={styles.searchPlaceholder}>
-              Search for homes near you...
+              {profile?.address 
+                ? `Searching near ${profile.address.split(',')[0]}...` 
+                : 'Search for homes near you...'}
             </Text>
           </Pressable>
         </View>
@@ -224,13 +190,13 @@ export default function SeekerHome() {
           <View style={styles.actionsGrid}>
             <Pressable
               style={styles.actionCard}
-              onPress={navigateToNearby}
+              onPress={handleUpdateLocation}
             >
               <View style={styles.actionIconContainer}>
                 <Ionicons name="navigate" size={24} color="#007AFF" />
               </View>
               <Text style={styles.actionTitle}>Nearby</Text>
-              <Text style={styles.actionSubtitle}>Find homes</Text>
+              <Text style={styles.actionSubtitle}>Set location</Text>
             </Pressable>
 
             <Pressable
@@ -246,13 +212,13 @@ export default function SeekerHome() {
 
             <Pressable
               style={styles.actionCard}
-              onPress={navigateToBudget}
+              onPress={navigateToMessages}
             >
               <View style={styles.actionIconContainer}>
-                <Ionicons name="wallet" size={24} color="#007AFF" />
+                <Ionicons name="chatbubble-ellipses" size={24} color="#007AFF" />
               </View>
-              <Text style={styles.actionTitle}>Budget</Text>
-              <Text style={styles.actionSubtitle}>Set range</Text>
+              <Text style={styles.actionTitle}>Messages</Text>
+              <Text style={styles.actionSubtitle}>Chat</Text>
             </Pressable>
 
             <Pressable
@@ -307,7 +273,6 @@ export default function SeekerHome() {
         listing={selectedListing}
         onClose={() => setModalVisible(false)}
         isOwner={false}
-        onContact={handleContactOwner}
       />
     </>
   );

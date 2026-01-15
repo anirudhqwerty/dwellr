@@ -32,7 +32,6 @@ export default function RootLayout() {
 
     if (!session) {
       if (!inAuthGroup) {
-        // Only redirect to login if not already there
         router.replace('/(auth)/login');
       }
     } else {
@@ -49,17 +48,14 @@ export default function RootLayout() {
         .maybeSingle();
 
       if (!profile) {
-        // Fix: Only redirect if not already on 'complete-profile'
         if (segments[0] !== 'complete-profile') {
           router.replace('/complete-profile');
         }
       } else if (profile.role === 'owner') {
-        // Fix: Only redirect if not already in the 'owner' section
         if (segments[0] !== 'owner') {
           router.replace('/owner');
         }
       } else if (profile.role === 'seeker') {
-        // Fix: Only redirect if not already in the '(tabs)' section
         if (segments[0] !== '(tabs)') {
           router.replace('/(tabs)');
         }
@@ -79,11 +75,19 @@ export default function RootLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      {/* Fix: Point explicitly to the login screen, not the group folder */}
       <Stack.Screen name="(auth)/login" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="owner/index" />
-      <Stack.Screen name="seeker/index" />
+      <Stack.Screen name="owner/create-listing" />
+      <Stack.Screen name="owner/listings" />
+      <Stack.Screen name="owner/messages" />
+      <Stack.Screen name="owner/analytics" />
+      <Stack.Screen name="owner/conversation/[id]" />
+      <Stack.Screen name="seeker/update-location" />
+      <Stack.Screen name="seeker/map-view" />
+      <Stack.Screen name="seeker/all-listings" />
+      <Stack.Screen name="seeker/messages" />
+      <Stack.Screen name="seeker/conversation/[id]" />
       <Stack.Screen name="complete-profile" />
     </Stack>
   );
