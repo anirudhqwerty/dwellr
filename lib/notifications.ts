@@ -5,8 +5,8 @@ import { supabase } from './supabase';
 // Configure how notifications should be handled when app is in foreground
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowBanner: true, // Fixed: Replaced deprecated shouldShowAlert
-    shouldShowList: true,   // Fixed: Replaced deprecated shouldShowAlert
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -38,11 +38,11 @@ export async function registerForPushNotifications() {
     return;
   }
 
-  // Wrapped in try/catch to handle simulator errors gracefully
   try {
     token = (await Notifications.getExpoPushTokenAsync({
       projectId: 'ca3eb4ae-f7a7-4f6e-abfe-c6f4641899d2',
     })).data;
+    console.log("Device Push Token:", token); // Log this to verify!
   } catch (error) {
     console.log("Error fetching push token:", error);
   }
@@ -60,18 +60,26 @@ export async function sendNotificationToNearbyUsers(
     rent: number;
   }
 ) {
+  console.log("🚀 STARTING NOTIFICATION SEND...");
+  
   try {
-    // Get nearby seekers from the database
+    // 1. Get nearby seekers from the database
     const { data: nearbyUsers, error } = await supabase
       .rpc('get_nearby_seekers', {
         listing_lat: listingData.latitude,
         listing_lon: listingData.longitude,
       });
 
-    if (error) throw error;
+    if (error) {
+      console.error("❌ DB ERROR (get_nearby_seekers):", error);
+      throw error;
+    }
+
+    console.log(`🔎 Found ${nearbyUsers?.length || 0} users to notify.`);
+
     if (!nearbyUsers || nearbyUsers.length === 0) return { success: true, count: 0 };
 
-    // Send push notifications to all nearby users
+    // 2. Prepare messages
     const messages = nearbyUsers.map((user: any) => ({
       to: user.push_token,
       sound: 'default',
@@ -84,10 +92,13 @@ export async function sendNotificationToNearbyUsers(
       },
     }));
 
-    // Send in batches
+    // 3. Send in batches
     const batchSize = 100;
     for (let i = 0; i < messages.length; i += batchSize) {
       const batch = messages.slice(i, i + batchSize);
+      
+      console.log(`📤 Sending batch ${i / batchSize + 1} to Expo...`);
+      
       await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
         headers: {
@@ -97,21 +108,29 @@ export async function sendNotificationToNearbyUsers(
         body: JSON.stringify(batch),
       });
 
-      // Log notifications
-      const logEntries = batch.map((msg: any, index: number) => ({
-        user_id: nearbyUsers[i + index]?.user_id, // Corrected index mapping for batching
-        listing_id: listingId,
-        notification_type: 'new_listing',
-      }));
+      // 4. Log notifications (Safely!)
+      // Wrapped in try/catch so a logging error doesn't crash the actual notification process
+      try {
+        const logEntries = batch.map((msg: any, index: number) => ({
+          user_id: nearbyUsers[i + index]?.user_id, 
+          listing_id: listingId,
+          notification_type: 'new_listing',
+        }));
 
-      if(logEntries.length > 0) {
-        await supabase.from('notification_logs').insert(logEntries);
+        if(logEntries.length > 0) {
+          const { error: logError } = await supabase.from('notification_logs').insert(logEntries);
+          if (logError) console.warn("⚠️ Logging failed (non-fatal):", logError.message);
+        }
+      } catch (logErr) {
+        console.warn("⚠️ Logging skipped:", logErr);
       }
     }
 
+    console.log("✅ Notifications sent successfully!");
     return { success: true, count: messages.length };
+
   } catch (error) {
-    console.error('Error sending notifications:', error);
+    console.error('❌ FATAL ERROR sending notifications:', error);
     return { success: false, error };
   }
 }
@@ -166,14 +185,12 @@ export async function notifyOwnersAboutSeeker(
 
 // Listen for notifications while app is open
 export function setupNotificationListener(callback: (notification: any) => void) {
-  const subscription = Notifications.addNotificationReceivedListener(callback);
-  return subscription;
+  return Notifications.addNotificationReceivedListener(callback);
 }
 
 // Handle notification tap
 export function setupNotificationResponseListener(callback: (response: any) => void) {
-  const subscription = Notifications.addNotificationResponseReceivedListener(callback);
-  return subscription;
+  return Notifications.addNotificationResponseReceivedListener(callback);
 }
 
 // Schedule a local notification (for testing)
@@ -186,12 +203,13 @@ export async function scheduleTestNotification(
     content: {
       title,
       body,
-      sound: 'default', // Fixed: Must be string 'default', not boolean true
+      sound: 'default',
       priority: Notifications.AndroidNotificationPriority.HIGH,
     },
     trigger: { 
-        seconds: seconds,
-        repeats: false // Fixed: Added repeats: false to resolve TypeScript ambiguity
-    } as any,
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: seconds,
+      repeats: false 
+    },
   });
 }

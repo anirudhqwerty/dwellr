@@ -14,12 +14,12 @@ import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-// FIX: Import from 'legacy' to use readAsStringAsync without errors
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import { sendNotificationToNearbyUsers } from '../../lib/notifications';
 
 const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -47,7 +47,6 @@ export default function CreateListing() {
   const mapRef = useRef<MapView>(null);
   const searchTimeout = useRef<any>(null);
 
-  // --- IMAGE PICKER LOGIC ---
   const pickImages = async () => {
     if (images.length >= 5) {
       Alert.alert('Limit Reached', 'You can only add up to 5 images.');
@@ -55,7 +54,6 @@ export default function CreateListing() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      // FIX: Use string literal array to avoid Enum errors
       mediaTypes: ['images'], 
       allowsMultipleSelection: true,
       selectionLimit: 5 - images.length,
@@ -73,7 +71,6 @@ export default function CreateListing() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  // --- ROBUST UPLOAD LOGIC ---
   const uploadImages = async (userId: string) => {
     const uploadedUrls: string[] = [];
 
@@ -82,12 +79,10 @@ export default function CreateListing() {
         const fileExt = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
         const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
         
-        // FIX: Using legacy FileSystem with 'base64' string literal
         const base64 = await FileSystem.readAsStringAsync(uri, {
           encoding: 'base64',
         });
 
-        // Convert Base64 to ArrayBuffer and Upload
         const { error: uploadError } = await supabase.storage
           .from('listing-images')
           .upload(fileName, decode(base64), {
@@ -110,7 +105,6 @@ export default function CreateListing() {
     return uploadedUrls;
   };
 
-  // --- MAP & ADDRESS LOGIC ---
   const searchPlaces = async (query: string) => {
     setAddress(query);
     if (!query || query.length < 3) {
@@ -210,27 +204,59 @@ export default function CreateListing() {
 
       const uploadedImageUrls = await uploadImages(user.id);
 
-      const { error } = await supabase.from('listings').insert({
-        owner_id: user.id,
-        title,
-        description,
-        rent: parseFloat(rent),
-        address,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        status: 'active',
-        images: uploadedImageUrls,
-      });
+      // Insert the listing
+      const { data: newListing, error } = await supabase
+        .from('listings')
+        .insert({
+          owner_id: user.id,
+          title,
+          description,
+          rent: parseFloat(rent),
+          address,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          status: 'active',
+          images: uploadedImageUrls,
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
+      console.log('✅ Listing created:', newListing.id);
+
+      // Send notifications to nearby seekers
+      try {
+        console.log('📤 Sending notifications to nearby seekers...');
+        const notificationResult = await sendNotificationToNearbyUsers(
+          newListing.id,
+          {
+            title: title,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            rent: parseFloat(rent),
+          }
+        );
+
+        if (notificationResult.success) {
+          console.log(`✅ Notifications sent to ${notificationResult.count} users`);
+        } else {
+          console.error('⚠️ Notification sending failed:', notificationResult.error);
+        }
+      } catch (notifError) {
+        console.error('⚠️ Error in notification process:', notifError);
+        // Don't fail the listing creation if notifications fail
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Success', 'Listing created successfully!', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      Alert.alert(
+        'Success', 
+        'Listing created successfully! Nearby seekers will be notified.', 
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
 
     } catch (err: any) {
-      console.error(err);
+      console.error('❌ Error creating listing:', err);
       Alert.alert('Error', err.message ?? 'Something went wrong');
     } finally {
       setLoading(false);
@@ -242,7 +268,7 @@ export default function CreateListing() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>← Back</Text>
+          <Ionicons name="arrow-back" size={24} color="#007AFF" />
         </Pressable>
         <Text style={styles.headerTitle}>Create Listing</Text>
         <View style={{ width: 60 }} />
@@ -382,7 +408,9 @@ export default function CreateListing() {
             {loading ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <ActivityIndicator color="#fff" />
-                <Text style={styles.submitText}>{uploading ? 'Uploading Images...' : 'Creating...'}</Text>
+                <Text style={styles.submitText}>
+                  {uploading ? 'Uploading Images...' : 'Creating...'}
+                </Text>
               </View>
             ) : (
               <Text style={styles.submitText}>Create Listing</Text>
@@ -402,7 +430,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
   },
   backButton: { padding: 8 },
-  backText: { fontSize: 16, color: '#007AFF', fontWeight: '600' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
   scrollView: { flex: 1 },
   content: { padding: 20, paddingBottom: 40 },
