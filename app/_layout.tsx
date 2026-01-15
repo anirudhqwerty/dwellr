@@ -56,7 +56,11 @@ export default function RootLayout() {
           router.replace('/owner');
         }
       } else if (profile.role === 'seeker') {
-        if (segments[0] !== '(tabs)') {
+        // ✅ FIX: Allow seekers to visit '(tabs)' AND 'seeker' stack routes
+        const allowedRoots = ['(tabs)', 'seeker'];
+        
+        // If the current root segment is NOT in the allowed list, redirect to tabs
+        if (!allowedRoots.includes(segments[0] as string)) {
           router.replace('/(tabs)');
         }
       }
@@ -77,17 +81,22 @@ export default function RootLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)/login" />
       <Stack.Screen name="(tabs)" />
+      
+      {/* Owner Stack */}
       <Stack.Screen name="owner/index" />
       <Stack.Screen name="owner/create-listing" />
       <Stack.Screen name="owner/listings" />
       <Stack.Screen name="owner/messages" />
       <Stack.Screen name="owner/analytics" />
       <Stack.Screen name="owner/conversation/[id]" />
+      
+      {/* Seeker Stack */}
       <Stack.Screen name="seeker/update-location" />
       <Stack.Screen name="seeker/map-view" />
       <Stack.Screen name="seeker/all-listings" />
-      <Stack.Screen name="seeker/messages" />
+      {/* Removed "seeker/messages" because it is now a tab */}
       <Stack.Screen name="seeker/conversation/[id]" />
+      
       <Stack.Screen name="complete-profile" />
     </Stack>
   );

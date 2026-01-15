@@ -45,11 +45,12 @@ export default function UpdateLocation() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Use maybeSingle() to avoid errors if no settings exist yet
       const { data: settings } = await supabase
         .from('notification_settings')
         .select('latitude, longitude')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (settings?.latitude && settings?.longitude) {
         const newLocation = {
@@ -59,11 +60,14 @@ export default function UpdateLocation() {
           longitudeDelta: 0.005,
         };
         setLocation(newLocation);
-        mapRef.current?.animateToRegion(newLocation, 1000);
+        // Only animate if map is ready, otherwise initialRegion handles it
+        if (mapRef.current) {
+            mapRef.current.animateToRegion(newLocation, 1000);
+        }
         reverseGeocode(settings.latitude, settings.longitude);
       }
     } catch (error) {
-      console.log('No saved location found');
+      console.log('Error loading location:', error);
     }
   };
 
@@ -140,7 +144,8 @@ export default function UpdateLocation() {
       latitudeDelta: region.latitudeDelta,
       longitudeDelta: region.longitudeDelta,
     });
-    reverseGeocode(region.latitude, region.longitude);
+    // Optional: reverseGeocode only on specific events to save API calls
+    // reverseGeocode(region.latitude, region.longitude);
   };
 
   const handleUpdateLocation = async () => {
@@ -151,7 +156,7 @@ export default function UpdateLocation() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not found');
 
-      // Update profile address
+      // 1. Update Profile Address
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ address: address })
@@ -159,14 +164,21 @@ export default function UpdateLocation() {
 
       if (profileError) throw profileError;
 
-      // Get existing settings
+      // 2. Fetch Profile Role (to ensure we don't break foreign key/not null constraints)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      // 3. Get existing settings (use maybeSingle to avoid throw on null)
       const { data: existingSettings } = await supabase
         .from('notification_settings')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      // Update notification settings
+      // 4. Update notification settings
       const { error: settingsError } = await supabase
         .from('notification_settings')
         .upsert({
@@ -175,7 +187,9 @@ export default function UpdateLocation() {
           enabled: existingSettings?.enabled ?? true,
           latitude: location.latitude,
           longitude: location.longitude,
-          role: 'seeker',
+          // Update PostGIS column for spatial queries
+          location: `POINT(${location.longitude} ${location.latitude})`,
+          role: profile?.role || 'seeker', // Fallback to seeker if undefined
           push_token: existingSettings?.push_token,
         }, { onConflict: 'user_id' });
 
@@ -187,6 +201,7 @@ export default function UpdateLocation() {
       ]);
 
     } catch (err: any) {
+      console.error(err);
       Alert.alert('Error', err.message ?? 'Failed to update location');
     } finally {
       setLoading(false);
