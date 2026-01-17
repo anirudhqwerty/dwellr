@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   TextInput,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
@@ -29,9 +29,12 @@ export default function SeekerMessages() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string>('');
 
-  useEffect(() => {
-    loadConversations();
-  }, []);
+  //  Use useFocusEffect to reload when tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadConversations();
+    }, [])
+  );
 
   const loadConversations = async () => {
     try {
@@ -40,7 +43,7 @@ export default function SeekerMessages() {
       
       setCurrentUserId(user.id);
 
-      // Get all messages where user is sender or receiver
+      //  Get all messages where user is involved
       const { data: messages, error } = await supabase
         .from('messages')
         .select(`
@@ -52,7 +55,10 @@ export default function SeekerMessages() {
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading messages:', error);
+        throw error;
+      }
 
       // Group messages into conversations
       const conversationMap = new Map<string, Conversation>();
@@ -93,8 +99,9 @@ export default function SeekerMessages() {
 
   const openConversation = (conv: Conversation) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    //  Fixed navigation path
     router.push({
-      pathname: '/seeker/conversation/[id]',
+      pathname: '/seeker/conversation/[id]' as any,
       params: {
         id: conv.other_user_id,
         listingId: conv.listing_id,
@@ -117,6 +124,7 @@ export default function SeekerMessages() {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
+    if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
@@ -146,7 +154,7 @@ export default function SeekerMessages() {
           <Text style={styles.timestamp}>{formatTime(item.last_message_time)}</Text>
         </View>
         <Text style={styles.listingTitle} numberOfLines={1}>
-          🏠 {item.listing_title}
+           {item.listing_title}
         </Text>
         <Text
           style={[
@@ -173,12 +181,9 @@ export default function SeekerMessages() {
 
   return (
     <View style={styles.container}>
+      {/*  Removed back button since this is a tab */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#111827" />
-        </Pressable>
         <Text style={styles.headerTitle}>Messages</Text>
-        <View style={{ width: 40 }} />
       </View>
 
       <View style={styles.searchContainer}>
@@ -190,6 +195,11 @@ export default function SeekerMessages() {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
+        {searchQuery.length > 0 && (
+          <Pressable onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+          </Pressable>
+        )}
       </View>
 
       {filteredConversations.length === 0 ? (
@@ -210,6 +220,7 @@ export default function SeekerMessages() {
           renderItem={renderConversation}
           keyExtractor={(item) => `${item.other_user_id}-${item.listing_id}`}
           contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
@@ -228,9 +239,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 15,
@@ -238,13 +246,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  backButton: {
-    padding: 8,
-    marginLeft: -8,
-  },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#111827',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -256,10 +261,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    gap: 8,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 8,
     fontSize: 16,
     color: '#111827',
   },

@@ -9,11 +9,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 interface Message {
   id: string;
@@ -33,47 +35,45 @@ export default function ConversationDetail() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('');
+  const [isOnline, setIsOnline] = useState(true);
+  
   const flatListRef = useRef<FlatList>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
-    loadMessages();
+    initializeChat();
     
-    // Set up real-time subscription
-    const subscription = supabase
-      .channel('messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `listing_id=eq.${listingId}`,
-        },
-        (payload) => {
-          const newMsg = payload.new as Message;
-          if (
-            (newMsg.sender_id === otherUserId && newMsg.receiver_id === currentUserId) ||
-            (newMsg.sender_id === currentUserId && newMsg.receiver_id === otherUserId)
-          ) {
-            setMessages((prev) => [...prev, newMsg]);
-            markAsRead(newMsg.id);
-          }
-        }
-      )
-      .subscribe();
-
     return () => {
-      subscription.unsubscribe();
+      // Cleanup on unmount
+      if (channelRef.current) {
+        console.log(' Cleaning up realtime subscription');
+        channelRef.current.unsubscribe();
+      }
     };
-  }, [listingId, otherUserId, currentUserId]);
+  }, []);
+
+  const initializeChat = async () => {
+    await loadMessages();
+    setupRealtimeSubscription();
+  };
 
   const loadMessages = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        Alert.alert('Error', 'User not found');
+        return;
+      }
 
       setCurrentUserId(user.id);
 
+      console.log(' Loading messages for:', {
+        currentUser: user.id,
+        otherUser: otherUserId,
+        listing: listingId
+      });
+
+      // Load messages
       const { data, error } = await supabase
         .from('messages')
         .select('*')
@@ -81,60 +81,165 @@ export default function ConversationDetail() {
         .or(`and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`)
         .order('created_at', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error(' Error loading messages:', error);
+        throw error;
+      }
 
+      console.log(` Loaded ${data?.length || 0} messages`);
       setMessages(data || []);
 
       // Mark unread messages as read
-      const unreadMessages = data?.filter(
-        (msg) => msg.receiver_id === user.id && !msg.read
-      );
+      if (data && data.length > 0) {
+        const unreadMessages = data.filter(
+          (msg) => msg.receiver_id === user.id && !msg.read
+        );
 
-      if (unreadMessages && unreadMessages.length > 0) {
-        for (const msg of unreadMessages) {
-          await markAsRead(msg.id);
+        if (unreadMessages.length > 0) {
+          console.log(` Marking ${unreadMessages.length} messages as read`);
+          const { error: updateError } = await supabase
+            .from('messages')
+            .update({ read: true })
+            .in('id', unreadMessages.map(m => m.id));
+
+          if (updateError) {
+            console.error(' Error marking messages as read:', updateError);
+          }
         }
       }
     } catch (error) {
-      console.error('Error loading messages:', error);
+      console.error(' Error in loadMessages:', error);
+      Alert.alert('Error', 'Failed to load messages');
     } finally {
       setLoading(false);
     }
   };
 
-  const markAsRead = async (messageId: string) => {
+  const setupRealtimeSubscription = async () => {
     try {
-      await supabase
-        .from('messages')
-        .update({ read: true })
-        .eq('id', messageId);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const channelName = `messages:${listingId}`;
+      console.log(` Setting up realtime for channel: ${channelName}`);
+
+      // Create a channel for this specific conversation
+      const channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `listing_id=eq.${listingId}`,
+          },
+          async (payload) => {
+            console.log(' New message received via realtime:', payload);
+            const newMsg = payload.new as Message;
+            
+            // Only add message if it's part of this conversation
+            if (
+              (newMsg.sender_id === otherUserId && newMsg.receiver_id === user.id) ||
+              (newMsg.sender_id === user.id && newMsg.receiver_id === otherUserId)
+            ) {
+              console.log(' Message belongs to this conversation, adding to list');
+              
+              // Add to messages list
+              setMessages((prev) => {
+                // Prevent duplicates
+                if (prev.some(m => m.id === newMsg.id)) {
+                  return prev;
+                }
+                return [...prev, newMsg];
+              });
+              
+              // Mark as read if we're the receiver
+              if (newMsg.receiver_id === user.id && !newMsg.read) {
+                await supabase
+                  .from('messages')
+                  .update({ read: true })
+                  .eq('id', newMsg.id);
+              }
+              
+              // Scroll to bottom
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }, 100);
+              
+              // Haptic feedback
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log(' Subscription status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log(' Successfully subscribed to realtime');
+            setIsOnline(true);
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error(' Realtime subscription error');
+            setIsOnline(false);
+          } else if (status === 'TIMED_OUT') {
+            console.error('️ Realtime subscription timed out');
+            setIsOnline(false);
+          }
+        });
+
+      channelRef.current = channel;
     } catch (error) {
-      console.error('Error marking message as read:', error);
+      console.error(' Error setting up realtime:', error);
+      setIsOnline(false);
     }
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+    const messageText = newMessage.trim();
+    if (!messageText) return;
 
     setSending(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      const { error } = await supabase.from('messages').insert({
-        sender_id: currentUserId,
-        receiver_id: otherUserId as string,
-        listing_id: listingId as string,
-        message: newMessage.trim(),
+      console.log(' Sending message:', {
+        from: currentUserId,
+        to: otherUserId,
+        listing: listingId,
+        message: messageText
       });
 
-      if (error) throw error;
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: currentUserId,
+          receiver_id: otherUserId as string,
+          listing_id: listingId as string,
+          message: messageText,
+          read: false,
+        })
+        .select()
+        .single();
 
+      if (error) {
+        console.error(' Error sending message:', error);
+        throw error;
+      }
+
+      console.log(' Message sent successfully:', data);
+      
+      // Clear input
       setNewMessage('');
+      
+      // Scroll to bottom
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
-    } catch (error) {
-      console.error('Error sending message:', error);
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error: any) {
+      console.error(' Error in sendMessage:', error);
+      Alert.alert('Error', error.message || 'Failed to send message');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setSending(false);
     }
@@ -142,10 +247,22 @@ export default function ConversationDetail() {
 
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    
+    if (isToday) {
+      return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } else {
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
@@ -172,14 +289,24 @@ export default function ConversationDetail() {
           >
             {item.message}
           </Text>
-          <Text
-            style={[
-              styles.messageTime,
-              isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime,
-            ]}
-          >
-            {formatTime(item.created_at)}
-          </Text>
+          <View style={styles.messageFooter}>
+            <Text
+              style={[
+                styles.messageTime,
+                isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime,
+              ]}
+            >
+              {formatTime(item.created_at)}
+            </Text>
+            {isOwnMessage && (
+              <Ionicons 
+                name={item.read ? "checkmark-done" : "checkmark"} 
+                size={14} 
+                color="rgba(255, 255, 255, 0.7)" 
+                style={{ marginLeft: 4 }}
+              />
+            )}
+          </View>
         </View>
       </View>
     );
@@ -189,6 +316,7 @@ export default function ConversationDetail() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading conversation...</Text>
       </View>
     );
   }
@@ -204,9 +332,16 @@ export default function ConversationDetail() {
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </Pressable>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>{userName}</Text>
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.headerTitle}>{userName || 'User'}</Text>
+            {isOnline && (
+              <View style={styles.onlineIndicator}>
+                <View style={styles.onlineDot} />
+              </View>
+            )}
+          </View>
           <Text style={styles.headerSubtitle} numberOfLines={1}>
-            {listingTitle}
+            {listingTitle || 'Property'}
           </Text>
         </View>
         <View style={{ width: 40 }} />
@@ -218,10 +353,19 @@ export default function ConversationDetail() {
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messagesList}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        onContentSizeChange={() => {
+          if (messages.length > 0) {
+            flatListRef.current?.scrollToEnd({ animated: false });
+          }
+        }}
+        onLayout={() => {
+          if (messages.length > 0) {
+            flatListRef.current?.scrollToEnd({ animated: false });
+          }
+        }}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="chatbubbles-outline" size={48} color="#D1D5DB" />
+            <Ionicons name="chatbubbles-outline" size={64} color="#D1D5DB" />
             <Text style={styles.emptyText}>No messages yet</Text>
             <Text style={styles.emptySubtext}>Start the conversation!</Text>
           </View>
@@ -238,6 +382,8 @@ export default function ConversationDetail() {
             onChangeText={setNewMessage}
             multiline
             maxLength={500}
+            editable={!sending}
+            onSubmitEditing={sendMessage}
           />
           <Pressable
             style={[
@@ -270,6 +416,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
   },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -289,10 +440,29 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   headerTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#111827',
+  },
+  onlineIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+  },
+  onlineDot: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: '#10B981',
   },
   headerSubtitle: {
     fontSize: 12,
@@ -338,12 +508,15 @@ const styles = StyleSheet.create({
   otherMessageText: {
     color: '#111827',
   },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   messageTime: {
     fontSize: 11,
   },
   ownMessageTime: {
     color: 'rgba(255, 255, 255, 0.7)',
-    textAlign: 'right',
   },
   otherMessageTime: {
     color: '#9CA3AF',
@@ -352,7 +525,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
   },
   emptyText: {
     fontSize: 16,

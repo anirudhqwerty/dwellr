@@ -5,6 +5,7 @@ import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
 import { ComponentProps } from 'react';
 import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
+// 1. I added the missing icon names here
 type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
 type IconSymbolName = keyof typeof MAPPING;
 
@@ -14,7 +15,11 @@ type IconSymbolName = keyof typeof MAPPING;
  * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
  */
 const MAPPING = {
+  // See how I added the missing definitions below:
   'house.fill': 'home',
+  'heart.fill': 'favorite',        // Mapped to Material 'favorite'
+  'message.fill': 'chat',          // Mapped to Material 'chat'
+  'bell.fill': 'notifications',    // Mapped to Material 'notifications'
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',

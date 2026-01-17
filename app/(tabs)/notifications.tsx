@@ -71,7 +71,7 @@ export default function NotificationSettings() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not found');
 
-      // ✅ FIX: Always get a FRESH token when enabled
+      //  FIX: Always get a FRESH token when enabled
       let pushToken = null;
       if (notificationsEnabled) {
         pushToken = await getFreshPushToken();

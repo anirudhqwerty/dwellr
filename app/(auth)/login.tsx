@@ -19,6 +19,8 @@ import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+// 1. Import the icon library
+import { Ionicons } from '@expo/vector-icons';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -199,11 +201,8 @@ export default function AuthScreen() {
       >
         <View style={styles.header}>
           <View style={styles.illustrationContainer}>
-            <Image
-              source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f3e0.svg' }}
-              style={styles.illustration}
-              resizeMode="contain"
-            />
+            {/* 2. Changed Logo to Vector */}
+            <Ionicons name="home" size={48} color="#007AFF" />
           </View>
           
           <Text style={styles.title}>Dwellr</Text>
@@ -216,9 +215,12 @@ export default function AuthScreen() {
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Email</Text>
             <View style={styles.inputWrapper}>
-              <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/2709.svg' }}
-                style={styles.inputIcon}
+              {/* 3. Changed Email Icon to Vector */}
+              <Ionicons 
+                name="mail-outline" 
+                size={20} 
+                color="#6B7280" 
+                style={styles.vectorIcon} 
               />
               <TextInput
                 style={styles.input}
@@ -236,9 +238,12 @@ export default function AuthScreen() {
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Password</Text>
             <View style={styles.inputWrapper}>
-              <Image
-                source={{ uri: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f512.svg' }}
-                style={styles.inputIcon}
+              {/* 4. Changed Password Icon to Vector */}
+              <Ionicons 
+                name="lock-closed-outline" 
+                size={20} 
+                color="#6B7280" 
+                style={styles.vectorIcon} 
               />
               <TextInput
                 style={styles.input}
@@ -292,6 +297,7 @@ export default function AuthScreen() {
               loading && styles.buttonDisabled
             ]}
           >
+            {/* Kept Google Logo as Image (Standard Practice) */}
             <Image 
               source={{ uri: 'https://www.google.com/images/branding/googleg/1x/googleg_standard_color_128dp.png' }} 
               style={styles.googleIcon} 
@@ -358,10 +364,8 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 5,
   },
-  illustration: {
-    width: 60,
-    height: 60,
-  },
+  // Removed image-specific style, logic handled by Icon size props
+  
   title: {
     fontSize: 32,
     fontWeight: '800',
@@ -399,9 +403,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 56,
   },
-  inputIcon: {
-    width: 20,
-    height: 20,
+  // Added a specific style helper for the icons
+  vectorIcon: {
     marginRight: 12,
   },
   input: {

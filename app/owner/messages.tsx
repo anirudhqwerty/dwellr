@@ -159,7 +159,7 @@ export default function Messages() {
           <Text style={styles.timestamp}>{formatTime(item.last_message_time)}</Text>
         </View>
         <Text style={styles.listingTitle} numberOfLines={1}>
-          📍 {item.listing_title}
+           {item.listing_title}
         </Text>
         <Text
           style={[

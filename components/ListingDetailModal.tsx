@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,16 @@ import {
   Alert,
   Linking,
   Image,
+  Dimensions,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../lib/supabase';
 import { router } from 'expo-router';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const IMAGE_HEIGHT = 300;
 
 interface ListingDetailModalProps {
   visible: boolean;
@@ -34,12 +39,54 @@ export default function ListingDetailModal({
 }: ListingDetailModalProps) {
   const [isSaved, setIsSaved] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [imageModalVisible, setImageModalVisible] = useState(false);
+  const [modalImageIndex, setModalImageIndex] = useState(0);
+  
+  const scrollViewRef = useRef<ScrollView>(null);
+  const slideshowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (visible && !isOwner && listing) {
       checkIfSaved();
     }
   }, [visible, listing]);
+
+  // ✅ Auto-slideshow effect (only when main modal is visible, not image modal)
+  useEffect(() => {
+    if (visible && !imageModalVisible && listing?.images && listing.images.length > 1) {
+      startSlideshow();
+    } else {
+      stopSlideshow();
+    }
+
+    return () => stopSlideshow();
+  }, [visible, imageModalVisible, listing?.images]);
+
+  const startSlideshow = () => {
+    stopSlideshow(); // Clear any existing interval
+    slideshowIntervalRef.current = setInterval(() => {
+      setCurrentImageIndex((prevIndex) => {
+        const nextIndex = (prevIndex + 1) % listing.images.length;
+        
+        // Scroll to next image
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({
+            x: nextIndex * SCREEN_WIDTH,
+            animated: true,
+          });
+        }
+        
+        return nextIndex;
+      });
+    }, 3000); // 3 seconds per image
+  };
+
+  const stopSlideshow = () => {
+    if (slideshowIntervalRef.current) {
+      clearInterval(slideshowIntervalRef.current);
+      slideshowIntervalRef.current = null;
+    }
+  };
 
   const checkIfSaved = async () => {
     try {
@@ -55,7 +102,6 @@ export default function ListingDetailModal({
 
       setIsSaved(!!data);
     } catch (error) {
-      // Not saved
       setIsSaved(false);
     }
   };
@@ -71,7 +117,6 @@ export default function ListingDetailModal({
       }
 
       if (isSaved) {
-        // Unsave
         const { error } = await supabase
           .from('saved_listings')
           .delete()
@@ -80,7 +125,6 @@ export default function ListingDetailModal({
 
         if (error) throw error;
 
-        // Decrement interested count
         await supabase.rpc('decrement_listing_interested', {
           listing_id: listing.id
         });
@@ -88,7 +132,6 @@ export default function ListingDetailModal({
         setIsSaved(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        // Save
         const { error } = await supabase
           .from('saved_listings')
           .insert({
@@ -98,7 +141,6 @@ export default function ListingDetailModal({
 
         if (error) throw error;
 
-        // Increment interested count
         await supabase.rpc('increment_listing_interested', {
           listing_id: listing.id
         });
@@ -117,31 +159,76 @@ export default function ListingDetailModal({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
     try {
-      // If phone not in listing, fetch it from owner profile
+      console.log('🔍 Looking for phone number...');
+      console.log('Listing:', listing);
+      console.log('Listing owner_id:', listing?.owner_id);
+      console.log('Listing owner_phone:', listing?.owner_phone);
+      
+      // ✅ First try to get phone from the listing's owner join
       let phoneNumber = listing?.owner_phone;
       
-      if (!phoneNumber) {
-        const { data: ownerProfile } = await supabase
+      // ✅ If not available, fetch directly from profiles table
+      if (!phoneNumber && listing?.owner_id) {
+        console.log('📞 Fetching phone from profiles table...');
+        
+        // Use maybeSingle() instead of single() to avoid error when no rows
+        const { data: ownerProfile, error } = await supabase
           .from('profiles')
           .select('phone')
           .eq('id', listing.owner_id)
-          .single();
+          .maybeSingle();
         
+        if (error) {
+          console.error('❌ Error fetching owner profile:', error);
+        }
+        
+        console.log('Owner profile data:', ownerProfile);
         phoneNumber = ownerProfile?.phone;
       }
       
+      console.log('Final phone number:', phoneNumber);
+      
       if (!phoneNumber) {
-        Alert.alert('No Phone', 'Owner has not provided a phone number');
+        Alert.alert(
+          'No Phone Number', 
+          'The owner has not provided a contact number. Try sending a message instead.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Send Message', onPress: handleMessage }
+          ]
+        );
         return;
       }
 
-      const phoneUrl = `tel:${phoneNumber}`;
-      Linking.openURL(phoneUrl).catch(() => {
-        Alert.alert('Error', 'Unable to make call');
-      });
-    } catch (error) {
-      console.error('Error getting phone:', error);
-      Alert.alert('Error', 'Failed to get owner phone number');
+      // Remove any whitespace and validate
+      const cleanedPhone = phoneNumber.trim().replace(/\s+/g, '');
+      
+      if (!cleanedPhone) {
+        Alert.alert('Invalid Phone Number', 'The phone number is empty.');
+        return;
+      }
+      
+      const phoneUrl = `tel:${cleanedPhone}`;
+      
+      console.log('📱 Calling:', phoneUrl);
+      
+      const canOpen = await Linking.canOpenURL(phoneUrl);
+      if (!canOpen) {
+        Alert.alert('Error', 'Unable to make phone calls on this device');
+        return;
+      }
+      
+      await Linking.openURL(phoneUrl);
+    } catch (error: any) {
+      console.error('❌ Error making call:', error);
+      Alert.alert(
+        'Call Error', 
+        'Unable to place the call. Would you like to send a message instead?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Send Message', onPress: handleMessage }
+        ]
+      );
     }
   };
 
@@ -155,13 +242,11 @@ export default function ListingDetailModal({
         return;
       }
 
-      // Close modal first
       onClose();
       
-      // Small delay to ensure modal closes before navigation
       setTimeout(() => {
         router.push({
-          pathname: '/seeker/conversation/[id]',
+          pathname: '/seeker/conversation/[id]' as any,
           params: {
             id: listing.owner_id,
             listingId: listing.id,
@@ -195,165 +280,255 @@ export default function ListingDetailModal({
     );
   };
 
+  const openImageModal = (index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setModalImageIndex(index);
+    setImageModalVisible(true);
+  };
+
+  const closeImageModal = () => {
+    setImageModalVisible(false);
+    // Restart slideshow when image modal closes
+    if (visible && listing?.images && listing.images.length > 1) {
+      startSlideshow();
+    }
+  };
+
   if (!listing) return null;
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Pressable onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={28} color="#111827" />
-          </Pressable>
-          {!isOwner && (
-            <Pressable onPress={toggleSave} style={styles.saveButton}>
-              <Ionicons
-                name={isSaved ? "heart" : "heart-outline"}
-                size={28}
-                color={isSaved ? "#DC2626" : "#111827"}
-              />
+    <>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={onClose}
+      >
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <Pressable onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={28} color="#111827" />
             </Pressable>
-          )}
-        </View>
+            {!isOwner && (
+              <Pressable onPress={toggleSave} style={styles.saveButton}>
+                <Ionicons
+                  name={isSaved ? "heart" : "heart-outline"}
+                  size={28}
+                  color={isSaved ? "#DC2626" : "#111827"}
+                />
+              </Pressable>
+            )}
+          </View>
 
-        <ScrollView style={styles.scrollView}>
-          {listing.images && listing.images.length > 0 && (
-            <View style={styles.imageContainer}>
-              <ScrollView
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={(event) => {
-                  const index = Math.floor(
-                    event.nativeEvent.contentOffset.x /
-                    event.nativeEvent.layoutMeasurement.width
-                  );
-                  setCurrentImageIndex(index);
-                }}
-              >
-                {listing.images.map((image: string, index: number) => (
-                  <Image
-                    key={index}
-                    source={{ uri: image }}
-                    style={styles.image}
-                    resizeMode="cover"
-                  />
-                ))}
-              </ScrollView>
-              {listing.images.length > 1 && (
-                <View style={styles.pagination}>
-                  {listing.images.map((_: any, index: number) => (
-                    <View
+          <ScrollView style={styles.scrollView}>
+            {listing.images && listing.images.length > 0 && (
+              <View style={styles.imageContainer}>
+                <ScrollView
+                  ref={scrollViewRef}
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  scrollEventThrottle={16}
+                  onMomentumScrollEnd={(event) => {
+                    const index = Math.floor(
+                      event.nativeEvent.contentOffset.x / SCREEN_WIDTH
+                    );
+                    setCurrentImageIndex(index);
+                  }}
+                  onScrollBeginDrag={stopSlideshow}
+                  onScrollEndDrag={startSlideshow}
+                >
+                  {listing.images.map((image: string, index: number) => (
+                    <Pressable
                       key={index}
-                      style={[
-                        styles.paginationDot,
-                        index === currentImageIndex && styles.paginationDotActive,
-                      ]}
-                    />
+                      onPress={() => openImageModal(index)}
+                    >
+                      <Image
+                        source={{ uri: image }}
+                        style={styles.image}
+                        resizeMode="cover"
+                      />
+                    </Pressable>
                   ))}
+                </ScrollView>
+                
+                {listing.images.length > 1 && (
+                  <View style={styles.pagination}>
+                    {listing.images.map((_: any, index: number) => (
+                      <View
+                        key={index}
+                        style={[
+                          styles.paginationDot,
+                          index === currentImageIndex && styles.paginationDotActive,
+                        ]}
+                      />
+                    ))}
+                  </View>
+                )}
+                
+                {/* Slideshow indicator */}
+                {listing.images.length > 1 && (
+                  <View style={styles.slideshowBadge}>
+                    <Ionicons name="play-circle" size={16} color="#FFFFFF" />
+                    <Text style={styles.slideshowText}>Auto</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            <View style={styles.content}>
+              <View style={styles.titleRow}>
+                <Text style={styles.title}>{listing.title}</Text>
+                <View style={styles.statusBadge}>
+                  <Text style={styles.statusText}>{listing.status?.toUpperCase()}</Text>
+                </View>
+              </View>
+
+              <Text style={styles.price}>₹{listing.rent?.toLocaleString()}/month</Text>
+
+              <View style={styles.infoRow}>
+                <Ionicons name="location" size={20} color="#6B7280" />
+                <Text style={styles.address}>{listing.address}</Text>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Description</Text>
+                <Text style={styles.description}>{listing.description}</Text>
+              </View>
+
+              {!isOwner && listing.owner_name && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Owner</Text>
+                  <View style={styles.ownerCard}>
+                    <View style={styles.ownerAvatar}>
+                      <Ionicons name="person" size={24} color="#007AFF" />
+                    </View>
+                    <View style={styles.ownerInfo}>
+                      <Text style={styles.ownerName}>{listing.owner_name}</Text>
+                      {listing.owner_phone && (
+                        <Text style={styles.ownerPhone}>{listing.owner_phone}</Text>
+                      )}
+                    </View>
+                  </View>
                 </View>
               )}
             </View>
+          </ScrollView>
+
+          {!isOwner ? (
+            <View style={styles.footer}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  styles.callButton,
+                  pressed && styles.actionButtonPressed,
+                ]}
+                onPress={handleCall}
+              >
+                <Ionicons name="call" size={20} color="#FFFFFF" />
+                <Text style={styles.callButtonText}>Call Owner</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  styles.messageButton,
+                  pressed && styles.actionButtonPressed,
+                ]}
+                onPress={handleMessage}
+              >
+                <Ionicons name="chatbubble-ellipses" size={20} color="#FFFFFF" />
+                <Text style={styles.messageButtonText}>Message</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.footer}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  styles.editButton,
+                  pressed && styles.actionButtonPressed,
+                ]}
+                onPress={onEdit}
+              >
+                <Ionicons name="create" size={20} color="#007AFF" />
+                <Text style={styles.editButtonText}>Edit</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  styles.deleteButton,
+                  pressed && styles.actionButtonPressed,
+                ]}
+                onPress={handleDelete}
+              >
+                <Ionicons name="trash" size={20} color="#DC2626" />
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </Pressable>
+            </View>
           )}
+        </View>
+      </Modal>
 
-          <View style={styles.content}>
-            <View style={styles.titleRow}>
-              <Text style={styles.title}>{listing.title}</Text>
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusText}>{listing.status?.toUpperCase()}</Text>
+      {/* ✅ Image Zoom/Swipe Modal */}
+      <Modal
+        visible={imageModalVisible}
+        transparent={false}
+        animationType="fade"
+        onRequestClose={closeImageModal}
+      >
+        <View style={styles.imageModalContainer}>
+          <View style={styles.imageModalHeader}>
+            <Text style={styles.imageModalCounter}>
+              {modalImageIndex + 1} / {listing?.images?.length || 0}
+            </Text>
+            <Pressable onPress={closeImageModal} style={styles.imageModalClose}>
+              <Ionicons name="close-circle" size={32} color="#FFFFFF" />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            style={styles.imageModalScroll}
+            contentContainerStyle={styles.imageModalScrollContent}
+            onMomentumScrollEnd={(event) => {
+              const index = Math.round(
+                event.nativeEvent.contentOffset.x / SCREEN_WIDTH
+              );
+              setModalImageIndex(index);
+            }}
+          >
+            {listing?.images?.map((image: string, index: number) => (
+              <View key={index} style={styles.imageModalSlide}>
+                <Image
+                  source={{ uri: image }}
+                  style={styles.imageModalImage}
+                  resizeMode="contain"
+                />
               </View>
+            ))}
+          </ScrollView>
+
+          {/* Image indicator dots */}
+          {listing?.images && listing.images.length > 1 && (
+            <View style={styles.imageModalPagination}>
+              {listing.images.map((_: any, index: number) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.imageModalDot,
+                    index === modalImageIndex && styles.imageModalDotActive,
+                  ]}
+                />
+              ))}
             </View>
-
-            <Text style={styles.price}>₹{listing.rent?.toLocaleString()}/month</Text>
-
-            <View style={styles.infoRow}>
-              <Ionicons name="location" size={20} color="#6B7280" />
-              <Text style={styles.address}>{listing.address}</Text>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Description</Text>
-              <Text style={styles.description}>{listing.description}</Text>
-            </View>
-
-            {!isOwner && listing.owner_name && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Owner</Text>
-                <View style={styles.ownerCard}>
-                  <View style={styles.ownerAvatar}>
-                    <Ionicons name="person" size={24} color="#007AFF" />
-                  </View>
-                  <View style={styles.ownerInfo}>
-                    <Text style={styles.ownerName}>{listing.owner_name}</Text>
-                    {listing.owner_phone && (
-                      <Text style={styles.ownerPhone}>{listing.owner_phone}</Text>
-                    )}
-                  </View>
-                </View>
-              </View>
-            )}
-          </View>
-        </ScrollView>
-
-        {!isOwner ? (
-          <View style={styles.footer}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.actionButton,
-                styles.callButton,
-                pressed && styles.actionButtonPressed,
-              ]}
-              onPress={handleCall}
-            >
-              <Ionicons name="call" size={20} color="#FFFFFF" />
-              <Text style={styles.callButtonText}>Call Owner</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.actionButton,
-                styles.messageButton,
-                pressed && styles.actionButtonPressed,
-              ]}
-              onPress={handleMessage}
-            >
-              <Ionicons name="chatbubble-ellipses" size={20} color="#FFFFFF" />
-              <Text style={styles.messageButtonText}>Message</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.footer}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.actionButton,
-                styles.editButton,
-                pressed && styles.actionButtonPressed,
-              ]}
-              onPress={onEdit}
-            >
-              <Ionicons name="create" size={20} color="#007AFF" />
-              <Text style={styles.editButtonText}>Edit</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.actionButton,
-                styles.deleteButton,
-                pressed && styles.actionButtonPressed,
-              ]}
-              onPress={handleDelete}
-            >
-              <Ionicons name="trash" size={20} color="#DC2626" />
-              <Text style={styles.deleteButtonText}>Delete</Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
-    </Modal>
+          )}
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -386,8 +561,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   image: {
-    width: 400,
-    height: 300,
+    width: SCREEN_WIDTH,
+    height: IMAGE_HEIGHT,
     backgroundColor: '#F3F4F6',
   },
   pagination: {
@@ -408,6 +583,23 @@ const styles = StyleSheet.create({
   paginationDotActive: {
     backgroundColor: '#FFFFFF',
     width: 24,
+  },
+  slideshowBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  slideshowText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   content: {
     padding: 20,
@@ -556,5 +748,68 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     fontSize: 16,
     fontWeight: '700',
+  },
+  
+  // ✅ Image Modal Styles
+  imageModalContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  imageModalHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  imageModalCounter: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  imageModalClose: {
+    padding: 4,
+  },
+  imageModalScroll: {
+    flex: 1,
+  },
+  imageModalScrollContent: {
+    alignItems: 'center',
+  },
+  imageModalSlide: {
+    width: SCREEN_WIDTH,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageModalImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH * 1.2,
+  },
+  imageModalPagination: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  imageModalDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  imageModalDotActive: {
+    backgroundColor: '#FFFFFF',
+    width: 28,
   },
 });

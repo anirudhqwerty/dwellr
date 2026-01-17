@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,76 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  Image,
+  Animated,
+  Dimensions,
   Alert,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import ListingDetailModal from '../../components/ListingDetailModal';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width } = Dimensions.get('window');
+
+// --- Micro-Component: Scale Animation ---
+const ScalePressable = ({ children, style, onPress, activeScale = 0.97 }: any) => {
+  const scaleValue = useRef(new Animated.Value(1)).current;
+
+  const animateIn = () => {
+    Animated.spring(scaleValue, {
+      toValue: activeScale,
+      useNativeDriver: true,
+      speed: 20,
+    }).start();
+  };
+
+  const animateOut = () => {
+    Animated.spring(scaleValue, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+    }).start();
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={animateIn}
+      onPressOut={animateOut}
+      style={{ width: style?.width ? style.width : undefined }} 
+    >
+      <Animated.View
+        style={[
+          style, 
+          { transform: [{ scale: scaleValue }] },
+        ]}
+      >
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+};
+
+// --- Micro-Component: Skeleton Loader ---
+const SkeletonCard = () => {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  return <Animated.View style={[styles.skeletonCard, { opacity }]} />;
+};
 
 export default function OwnerHome() {
   const [profile, setProfile] = useState<any>(null);
@@ -34,7 +96,6 @@ export default function OwnerHome() {
   const loadData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
       if (!user) return;
 
       const { data: profileData } = await supabase
@@ -53,8 +114,6 @@ export default function OwnerHome() {
 
       if (listingsData) {
         setListings(listingsData);
-        
-        // Calculate total interested
         const total = listingsData.reduce((sum, listing) => sum + (listing.interested_count || 0), 0);
         setTotalInterested(total);
       }
@@ -73,33 +132,27 @@ export default function OwnerHome() {
   };
 
   const handleSignOut = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await supabase.auth.signOut();
     router.replace('/(auth)/login');
   };
 
+  // Navigation
   const navigateToCreateListing = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Haptics.selectionAsync();
     router.push('/owner/create-listing');
   };
-
   const navigateToMyListings = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.selectionAsync();
     router.push('/owner/listings');
   };
-
-  const navigateToAnalytics = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/owner/analytics');
-  };
-
   const navigateToMessages = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.selectionAsync();
     router.push('/owner/messages');
   };
 
   const openListingDetail = (listing: any) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.selectionAsync();
     setSelectedListing(listing);
     setModalVisible(true);
   };
@@ -110,204 +163,190 @@ export default function OwnerHome() {
 
   const handleDeleteListing = async () => {
     if (!selectedListing) return;
-
     try {
-      const { error } = await supabase
-        .from('listings')
-        .delete()
-        .eq('id', selectedListing.id);
-
+      const { error } = await supabase.from('listings').delete().eq('id', selectedListing.id);
       if (error) throw error;
-
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Success', 'Listing deleted successfully');
       setModalVisible(false);
       loadData();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to delete listing');
+      Alert.alert('Error', error.message);
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
-    );
-  }
-
-  const renderListingItem = ({ item }: { item: any }) => (
-    <Pressable
-      style={({ pressed }) => [
-        styles.listingCard,
-        pressed && styles.listingCardPressed,
-      ]}
+  const renderListingCard = (item: any) => (
+    <ScalePressable
+      key={item.id}
+      style={styles.listingCard}
       onPress={() => openListingDetail(item)}
     >
-      <View style={styles.listingHeader}>
-        <Text style={styles.listingTitle}>{item.title}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: item.status === 'active' ? '#DCFCE7' : '#F3F4F6' }]}>
-          <Text style={[styles.statusText, { color: item.status === 'active' ? '#166534' : '#374151' }]}>
+      {/* Image Section - Matching Seeker Index Style */}
+      <View style={styles.cardImageContainer}>
+        <Image
+          source={{ 
+            uri: item.images?.[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' 
+          }}
+          style={styles.cardImage}
+          resizeMode="cover"
+        />
+        
+        {/* Status Badge */}
+        <View style={[styles.statusBadge, { backgroundColor: item.status === 'active' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(243, 244, 246, 0.95)' }]}>
+          <Text style={[styles.statusText, { color: item.status === 'active' ? '#059669' : '#4B5563' }]}>
             {item.status?.toUpperCase()}
           </Text>
         </View>
+
+        {/* Price Tag */}
+        <View style={styles.priceTag}>
+          <Text style={styles.priceText}>₹{item.rent?.toLocaleString()}</Text>
+          <Text style={styles.periodText}>/mo</Text>
+        </View>
       </View>
-      <Text style={styles.listingAddress} numberOfLines={1}>
-        <Ionicons name="location-outline" size={14} color="#6B7280" /> {item.address}
-      </Text>
-      <Text style={styles.listingPrice}>₹{item.rent?.toLocaleString()}/month</Text>
-      {item.interested_count > 0 && (
-        <View style={styles.interestedBadge}>
-          <Ionicons name="heart" size={14} color="#DC2626" />
-          <Text style={styles.interestedText}>
-            {item.interested_count} interested
+
+      {/* Content Section */}
+      <View style={styles.cardContent}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.listingTitle} numberOfLines={1}>{item.title}</Text>
+          <Ionicons name="chevron-forward-circle" size={24} color="#E5E7EB" />
+        </View>
+        
+        <View style={styles.listingRow}>
+          <Ionicons name="location-outline" size={16} color="#6B7280" />
+          <Text style={styles.listingAddress} numberOfLines={1}>
+            {item.address}
           </Text>
         </View>
-      )}
-      <View style={styles.tapHint}>
-        <Text style={styles.tapHintText}>Tap to view details</Text>
-        <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+
+        {/* Owner Specific Stats in Card */}
+        {item.interested_count > 0 && (
+          <View style={styles.cardStatsRow}>
+            <View style={styles.interestedBadge}>
+              <Ionicons name="heart" size={14} color="#DC2626" />
+              <Text style={styles.interestedText}>
+                {item.interested_count} interested
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
-    </Pressable>
+    </ScalePressable>
   );
 
   return (
-    <>
+    <View style={styles.container}>
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#007AFF" />
         }
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
+        {/* Header */}
+        <View style={styles.headerContainer}>
           <View style={styles.headerTop}>
             <View>
-              <Text style={styles.greeting}>Hello,</Text>
-              <Text style={styles.name}>{profile?.name || 'Owner'}</Text>
+              <Text style={styles.greeting}>Welcome back,</Text>
+              <Text style={styles.name}>{profile?.name?.split(' ')[0] || 'Owner'}</Text>
             </View>
-            <Pressable
+            <ScalePressable
               style={styles.avatarContainer}
-              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              onPress={() => Haptics.selectionAsync()}
             >
               <Ionicons name="person" size={24} color="#007AFF" />
-            </Pressable>
+            </ScalePressable>
           </View>
 
-          <View style={styles.statsContainer}>
+          {/* Create Listing Button (Styled to pop) */}
+          <ScalePressable style={styles.createButtonContainer} onPress={navigateToCreateListing}>
+            <LinearGradient
+              colors={['#111827', '#1F2937']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.createGradient}
+            >
+              <View style={styles.createIconBg}>
+                <Ionicons name="add" size={24} color="#111827" />
+              </View>
+              <View>
+                <Text style={styles.createTitle}>Post a new home</Text>
+                <Text style={styles.createSubtitle}>Reach thousands of seekers</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={20} color="#6B7280" style={{ marginLeft: 'auto' }} />
+            </LinearGradient>
+          </ScalePressable>
+        </View>
+
+        {/* Dashboard Stats (Removed Views) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Overview</Text>
+          <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Text style={styles.statNumber}>{listings.length}</Text>
               <Text style={styles.statLabel}>Active Listings</Text>
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statNumber}>{totalInterested}</Text>
-              <Text style={styles.statLabel}>Interested</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>0</Text>
-              <Text style={styles.statLabel}>Total Views</Text>
+              <Text style={styles.statLabel}>Total Interested</Text>
             </View>
           </View>
         </View>
 
+        {/* Quick Actions (Removed Analytics & Settings) */}
         <View style={styles.section}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.createButton,
-              pressed && styles.createButtonPressed,
-            ]}
-            onPress={navigateToCreateListing}
-          >
-            <LinearGradient
-              colors={['#007AFF', '#0051D5']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.createGradient}
-            >
-              <Ionicons name="add-circle-outline" size={28} color="#FFFFFF" />
-              <Text style={styles.createText}>Create New Listing</Text>
-            </LinearGradient>
-          </Pressable>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <Text style={styles.sectionTitle}>Manage</Text>
           <View style={styles.actionsGrid}>
-            <Pressable
-              style={styles.actionCard}
-              onPress={navigateToMyListings}
-            >
-              <View style={styles.actionIconContainer}>
-                <Ionicons name="list" size={24} color="#007AFF" />
-              </View>
-              <Text style={styles.actionTitle}>My Listings</Text>
-              <Text style={styles.actionSubtitle}>View all</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.actionCard}
-              onPress={navigateToAnalytics}
-            >
-              <View style={styles.actionIconContainer}>
-                <Ionicons name="bar-chart" size={24} color="#007AFF" />
-              </View>
-              <Text style={styles.actionTitle}>Analytics</Text>
-              <Text style={styles.actionSubtitle}>View stats</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.actionCard}
-              onPress={navigateToMessages}
-            >
-              <View style={styles.actionIconContainer}>
-                <Ionicons name="chatbubble-ellipses" size={24} color="#007AFF" />
-              </View>
-              <Text style={styles.actionTitle}>Messages</Text>
-              <Text style={styles.actionSubtitle}>0 new</Text>
-            </Pressable>
+            {[
+              { icon: 'list', title: 'My Listings', sub: 'View all', fn: navigateToMyListings, color: '#3B82F6' },
+              { icon: 'chatbubbles', title: 'Messages', sub: 'Chat', fn: navigateToMessages, color: '#10B981' },
+            ].map((action, index) => (
+              <ScalePressable key={index} style={styles.actionCard} onPress={action.fn}>
+                <View style={[styles.actionIconContainer, { backgroundColor: `${action.color}15` }]}>
+                  <Ionicons name={action.icon as any} size={22} color={action.color} />
+                </View>
+                <Text style={styles.actionTitle}>{action.title}</Text>
+                <Text style={styles.actionSubtitle}>{action.sub}</Text>
+              </ScalePressable>
+            ))}
           </View>
         </View>
 
+        {/* Listings Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Your Listings</Text>
             {listings.length > 0 && (
-              <Pressable onPress={navigateToMyListings}>
+              <Pressable onPress={navigateToMyListings} hitSlop={10}>
                 <Text style={styles.sectionLink}>See all</Text>
               </Pressable>
             )}
           </View>
           
-          {listings.length === 0 ? (
+          {loading && !refreshing ? (
+            <View>
+              <SkeletonCard />
+              <SkeletonCard />
+            </View>
+          ) : listings.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="home-outline" size={64} color="#D1D5DB" style={{ marginBottom: 16 }} />
+              <View style={styles.emptyIconBg}>
+                <Ionicons name="home" size={32} color="#9CA3AF" />
+              </View>
               <Text style={styles.emptyTitle}>No listings yet</Text>
               <Text style={styles.emptySubtitle}>
-                Create your first listing to start connecting with seekers
+                Create your first listing to start connecting with seekers.
               </Text>
             </View>
           ) : (
-            <View>
-              {listings.slice(0, 3).map(item => (
-                <View key={item.id} style={{ marginBottom: 16 }}>
-                  {renderListingItem({ item })}
-                </View>
-              ))}
+            <View style={{ gap: 24 }}>
+              {listings.slice(0, 3).map((item) => renderListingCard(item))}
             </View>
           )}
         </View>
 
-        <View style={styles.infoCard}>
-          <Ionicons name="call" size={24} color="#007AFF" style={{ marginRight: 16 }} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>Contact Number</Text>
-            <Text style={styles.infoText}>{profile?.phone || 'Not set'}</Text>
-          </View>
-        </View>
-
-        <Pressable style={styles.signOutButton} onPress={handleSignOut}>
+        <ScalePressable style={styles.signOutButton} onPress={handleSignOut}>
           <Text style={styles.signOutText}>Sign Out</Text>
-        </Pressable>
+        </ScalePressable>
       </ScrollView>
 
       <ListingDetailModal
@@ -315,42 +354,33 @@ export default function OwnerHome() {
         listing={selectedListing}
         onClose={() => {
           setModalVisible(false);
-          loadData(); // Refresh to get updated interested count
+          loadData();
         }}
         isOwner={true}
         onEdit={handleEditListing}
         onDelete={handleDeleteListing}
       />
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FAFAFA',
   },
-  content: {
+  scrollContent: {
     paddingBottom: 40,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
+  
+  // Header
+  headerContainer: {
     backgroundColor: '#FFFFFF',
     paddingTop: 60,
     paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
+    paddingBottom: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   headerTop: {
     flexDirection: 'row',
@@ -359,75 +389,62 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   greeting: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#6B7280',
     fontWeight: '500',
+    marginBottom: 2,
   },
   name: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#111827',
-    marginTop: 4,
-  },
-  avatarContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-  },
-  statNumber: {
     fontSize: 24,
     fontWeight: '800',
     color: '#111827',
-    marginBottom: 4,
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '600',
+  avatarContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  section: {
-    padding: 20,
-  },
-  createButton: {
+
+  // Create Button
+  createButtonContainer: {
     borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#007AFF',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
   },
   createGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
+    padding: 16,
+    borderRadius: 16,
     gap: 12,
   },
-  createButtonPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
+  createIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  createText: {
-    color: '#FFFFFF',
-    fontSize: 18,
+  createTitle: {
+    fontSize: 16,
     fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  createSubtitle: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+
+  // Sections
+  section: {
+    padding: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -436,7 +453,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#111827',
   },
@@ -445,49 +462,213 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '600',
   },
+
+  // Stats Grid
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    // Depth
+    borderBottomWidth: 3,
+    borderBottomColor: '#D1D5DB',
+  },
+  statNumber: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  // Action Cards (Depth Style)
   actionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
   },
   actionCard: {
-    flex: 1,
-    minWidth: '47%',
+    width: (width - 52) / 2, // 2 column layout
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    borderBottomWidth: 4, // Depth effect
+    borderBottomColor: '#D1D5DB',
+    shadowColor: '#9CA3AF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   actionIconContainer: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: 12,
-    backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   actionTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   actionSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#6B7280',
   },
+
+  // Listing Cards (Vertical with Images)
+  listingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB', // Darker border
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  cardImageContainer: {
+    height: 180,
+    width: '100%',
+    position: 'relative',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  statusBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  priceTag: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  priceText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  periodText: {
+    fontSize: 12,
+    color: '#E5E7EB',
+    marginLeft: 2,
+  },
+  cardContent: {
+    padding: 16,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  listingTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    flex: 1,
+    marginRight: 8,
+  },
+  listingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  listingAddress: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginLeft: 6,
+    flex: 1,
+  },
+  cardStatsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  interestedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 100,
+    gap: 6,
+  },
+  interestedText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+
+  // Skeleton
+  skeletonCard: {
+    height: 280,
+    width: '100%',
+    backgroundColor: '#E5E7EB',
+    borderRadius: 20,
+    marginBottom: 20,
+  },
+
+  // Empty State
   emptyState: {
     alignItems: 'center',
     padding: 40,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
+    borderStyle: 'dashed',
     borderColor: '#E5E7EB',
   },
+  emptyIconBg: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F9FAFB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#111827',
     marginBottom: 8,
@@ -496,110 +677,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
   },
-  infoCard: {
-    marginHorizontal: 20,
-    marginTop: 20,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoTitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  infoText: {
-    fontSize: 16,
-    color: '#111827',
-    fontWeight: '700',
-  },
+  
+  // Sign Out
   signOutButton: {
     marginHorizontal: 20,
-    marginTop: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#DC2626',
-    borderRadius: 12,
+    marginTop: 10,
     padding: 16,
     alignItems: 'center',
   },
   signOutText: {
-    color: '#DC2626',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  listingCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  listingCardPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  listingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  listingTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    flex: 1,
-    marginRight: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  listingAddress: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 8,
-  },
-  listingPrice: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#007AFF',
-    marginBottom: 8,
-  },
-  interestedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 8,
-  },
-  interestedText: {
-    fontSize: 13,
-    color: '#DC2626',
+    color: '#EF4444',
+    fontSize: 15,
     fontWeight: '600',
-  },
-  tapHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 4,
-  },
-  tapHintText: {
-    fontSize: 12,
-    color: '#9CA3AF',
   },
 });

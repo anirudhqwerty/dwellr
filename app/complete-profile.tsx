@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -73,8 +74,13 @@ export default function CompleteProfile() {
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.header}>
-        <View style={styles.iconContainer}>
-          <Ionicons name="person-circle" size={60} color="#007AFF" />
+        {/* Header Vector */}
+        <View style={styles.imageContainer}>
+          <Image 
+            source={{ uri: 'https://img.icons8.com/clouds/200/user.png' }} 
+            style={styles.headerImage}
+            resizeMode="contain"
+          />
         </View>
         <Text style={styles.title}>Complete Your Profile</Text>
         <Text style={styles.subtitle}>
@@ -100,6 +106,7 @@ export default function CompleteProfile() {
         <View style={styles.inputContainer}>
           <Text style={styles.label}>I am a...</Text>
           <View style={styles.roleRow}>
+            {/* Seeker Role */}
             <Pressable
               style={[
                 styles.roleButton,
@@ -111,10 +118,10 @@ export default function CompleteProfile() {
               }}
             >
               <View style={styles.roleContent}>
-                <Ionicons 
-                  name="search" 
-                  size={32} 
-                  color={role === 'seeker' ? '#007AFF' : '#9CA3AF'} 
+                <Image 
+                  source={{ uri: 'https://img.icons8.com/clouds/200/map-pin.png' }} 
+                  style={styles.roleImage}
+                  resizeMode="contain"
                 />
                 <Text style={[
                   styles.roleText,
@@ -128,6 +135,7 @@ export default function CompleteProfile() {
               </View>
             </Pressable>
 
+            {/* Owner Role */}
             <Pressable
               style={[
                 styles.roleButton,
@@ -139,10 +147,10 @@ export default function CompleteProfile() {
               }}
             >
               <View style={styles.roleContent}>
-                <Ionicons 
-                  name="home" 
-                  size={32} 
-                  color={role === 'owner' ? '#007AFF' : '#9CA3AF'} 
+                <Image 
+                  source={{ uri: 'https://img.icons8.com/clouds/200/home.png' }} 
+                  style={styles.roleImage}
+                  resizeMode="contain"
                 />
                 <Text style={[
                   styles.roleText,
@@ -218,19 +226,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
   },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
+  imageContainer: {
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    // Add a subtle shadow/glow behind the main vector
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+  },
+  headerImage: {
+    width: 120,
+    height: 120,
   },
   title: {
     fontSize: 28,
@@ -286,8 +292,9 @@ const styles = StyleSheet.create({
   },
   roleButton: {
     flex: 1,
-    padding: 20,
-    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
@@ -300,11 +307,15 @@ const styles = StyleSheet.create({
   roleContent: {
     alignItems: 'center',
   },
+  roleImage: {
+    width: 80,
+    height: 80,
+    marginBottom: 10,
+  },
   roleText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#374151',
-    marginTop: 8,
     marginBottom: 4,
   },
   roleTextSelected: {

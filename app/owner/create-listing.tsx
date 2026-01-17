@@ -9,6 +9,8 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView, //  Imported
+  Platform,             //  Imported
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { router } from 'expo-router';
@@ -223,11 +225,11 @@ export default function CreateListing() {
 
       if (error) throw error;
 
-      console.log('✅ Listing created:', newListing.id);
+      console.log(' Listing created:', newListing.id);
 
       // Send notifications to nearby seekers
       try {
-        console.log('📤 Sending notifications to nearby seekers...');
+        console.log(' Sending notifications to nearby seekers...');
         const notificationResult = await sendNotificationToNearbyUsers(
           newListing.id,
           {
@@ -238,15 +240,13 @@ export default function CreateListing() {
           }
         );
 
-
         if (notificationResult.success) {
-          console.log(`✅ Notifications sent to ${notificationResult.count} users`);
+          console.log(` Notifications sent to ${notificationResult.count} users`);
         } else {
-          console.error('⚠️ Notification sending failed:', notificationResult.error);
+          console.error('️ Notification sending failed:', notificationResult.error);
         }
       } catch (notifError) {
-        console.error('⚠️ Error in notification process:', notifError);
-        // Don't fail the listing creation if notifications fail
+        console.error('️ Error in notification process:', notifError);
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -257,7 +257,7 @@ export default function CreateListing() {
       );
 
     } catch (err: any) {
-      console.error('❌ Error creating listing:', err);
+      console.error(' Error creating listing:', err);
       Alert.alert('Error', err.message ?? 'Something went wrong');
     } finally {
       setLoading(false);
@@ -266,160 +266,167 @@ export default function CreateListing() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#007AFF" />
-        </Pressable>
-        <Text style={styles.headerTitle}>Create Listing</Text>
-        <View style={{ width: 60 }} />
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Property Images ({images.length}/5)</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagesScroll}>
-            {images.map((uri, index) => (
-              <View key={index} style={styles.imageWrapper}>
-                <Image source={{ uri }} style={styles.thumbnail} />
-                <Pressable onPress={() => removeImage(index)} style={styles.removeBtn}>
-                  <Ionicons name="close-circle" size={24} color="#DC2626" />
-                </Pressable>
-              </View>
-            ))}
-            
-            {images.length < 5 && (
-              <Pressable onPress={pickImages} style={styles.addImageBtn}>
-                <Ionicons name="camera-outline" size={32} color="#007AFF" />
-                <Text style={styles.addImageText}>Add Photo</Text>
-              </Pressable>
-            )}
-          </ScrollView>
+    //  WRAPPER: Pushes content up when keyboard opens
+    <KeyboardAvoidingView 
+      style={{ flex: 1 }} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0} // Adjust if header overlaps
+    >
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#007AFF" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Create Listing</Text>
+          <View style={{ width: 60 }} />
         </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Property Title</Text>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              placeholder="e.g., 2BHK Apartment in Green Park"
-              placeholderTextColor="#9CA3AF"
-              style={styles.input}
-              value={title}
-              onChangeText={setTitle}
-            />
-          </View>
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Description</Text>
-          <View style={[styles.inputWrapper, styles.textArea]}>
-            <TextInput
-              placeholder="Describe your property..."
-              placeholderTextColor="#9CA3AF"
-              style={[styles.input, styles.textAreaInput]}
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={4}
-            />
-          </View>
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Monthly Rent (₹)</Text>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              placeholder="e.g., 15000"
-              placeholderTextColor="#9CA3AF"
-              style={styles.input}
-              value={rent}
-              onChangeText={setRent}
-              keyboardType="numeric"
-            />
-          </View>
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Address</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="location-outline" size={20} color="#6B7280" style={{ marginRight: 10 }} />
-            <TextInput
-              placeholder="Search for your address..."
-              placeholderTextColor="#9CA3AF"
-              style={styles.input}
-              value={address}
-              onChangeText={searchPlaces}
-            />
-            {searching && <ActivityIndicator size="small" color="#007AFF" />}
-          </View>
-          {searchResults.length > 0 && (
-            <View style={styles.searchResults}>
-              {searchResults.map((result) => (
-                <Pressable
-                  key={result.place_id}
-                  style={styles.searchResultItem}
-                  onPress={() => selectPlace(result.place_id, result.description)}
-                >
-                  <Ionicons name="location-sharp" size={16} color="#6B7280" style={{ marginRight: 10 }} />
-                  <Text style={styles.searchResultText}>{result.description}</Text>
-                </Pressable>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Property Images ({images.length}/5)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagesScroll}>
+              {images.map((uri, index) => (
+                <View key={index} style={styles.imageWrapper}>
+                  <Image source={{ uri }} style={styles.thumbnail} />
+                  <Pressable onPress={() => removeImage(index)} style={styles.removeBtn}>
+                    <Ionicons name="close-circle" size={24} color="#DC2626" />
+                  </Pressable>
+                </View>
               ))}
+              
+              {images.length < 5 && (
+                <Pressable onPress={pickImages} style={styles.addImageBtn}>
+                  <Ionicons name="camera-outline" size={32} color="#007AFF" />
+                  <Text style={styles.addImageText}>Add Photo</Text>
+                </Pressable>
+              )}
+            </ScrollView>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Property Title</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                placeholder="e.g., 2BHK Apartment in Green Park"
+                placeholderTextColor="#9CA3AF"
+                style={styles.input}
+                value={title}
+                onChangeText={setTitle}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Description</Text>
+            <View style={[styles.inputWrapper, styles.textArea]}>
+              <TextInput
+                placeholder="Describe your property..."
+                placeholderTextColor="#9CA3AF"
+                style={[styles.input, styles.textAreaInput]}
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={4}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Monthly Rent (₹)</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                placeholder="e.g., 15000"
+                placeholderTextColor="#9CA3AF"
+                style={styles.input}
+                value={rent}
+                onChangeText={setRent}
+                keyboardType="numeric"
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Address</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="location-outline" size={20} color="#6B7280" style={{ marginRight: 10 }} />
+              <TextInput
+                placeholder="Search for your address..."
+                placeholderTextColor="#9CA3AF"
+                style={styles.input}
+                value={address}
+                onChangeText={searchPlaces}
+              />
+              {searching && <ActivityIndicator size="small" color="#007AFF" />}
+            </View>
+            {searchResults.length > 0 && (
+              <View style={styles.searchResults}>
+                {searchResults.map((result) => (
+                  <Pressable
+                    key={result.place_id}
+                    style={styles.searchResultItem}
+                    onPress={() => selectPlace(result.place_id, result.description)}
+                  >
+                    <Ionicons name="location-sharp" size={16} color="#6B7280" style={{ marginRight: 10 }} />
+                    <Text style={styles.searchResultText}>{result.description}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {showMap && (
+            <View style={styles.mapContainer}>
+              <Text style={styles.label}>Location on Map</Text>
+              <View style={styles.mapWrapper}>
+                <MapView
+                  ref={mapRef}
+                  provider={PROVIDER_GOOGLE}
+                  style={styles.map}
+                  initialRegion={location}
+                  onMapReady={() => setIsMapReady(true)}
+                  onRegionChangeComplete={onRegionChangeComplete}
+                />
+                <View style={styles.markerFixed}>
+                  <Ionicons name="location-sharp" size={40} color="#EA4335" />
+                </View>
+              </View>
+              <Text style={styles.mapHint}> Move map to pin exact location</Text>
             </View>
           )}
-        </View>
 
-        {showMap && (
-          <View style={styles.mapContainer}>
-            <Text style={styles.label}>Location on Map</Text>
-            <View style={styles.mapWrapper}>
-              <MapView
-                ref={mapRef}
-                provider={PROVIDER_GOOGLE}
-                style={styles.map}
-                initialRegion={location}
-                onMapReady={() => setIsMapReady(true)}
-                onRegionChangeComplete={onRegionChangeComplete}
-              />
-              <View style={styles.markerFixed}>
-                <Ionicons name="location-sharp" size={40} color="#EA4335" />
-              </View>
-            </View>
-            <Text style={styles.mapHint}>📍 Move map to pin exact location</Text>
-          </View>
-        )}
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.submitButton,
-            pressed && styles.submitButtonPressed,
-          ]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          <LinearGradient
-            colors={['#007AFF', '#0051D5']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.submitGradient}
+          <Pressable
+            style={({ pressed }) => [
+              styles.submitButton,
+              pressed && styles.submitButtonPressed,
+            ]}
+            onPress={handleSubmit}
+            disabled={loading}
           >
-            {loading ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <ActivityIndicator color="#fff" />
-                <Text style={styles.submitText}>
-                  {uploading ? 'Uploading Images...' : 'Creating...'}
-                </Text>
-              </View>
-            ) : (
-              <Text style={styles.submitText}>Create Listing</Text>
-            )}
-          </LinearGradient>
-        </Pressable>
-      </ScrollView>
-    </View>
+            <LinearGradient
+              colors={['#007AFF', '#0051D5']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.submitGradient}
+            >
+              {loading ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.submitText}>
+                    {uploading ? 'Uploading Images...' : 'Creating...'}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.submitText}>Create Listing</Text>
+              )}
+            </LinearGradient>
+          </Pressable>
+        </ScrollView>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
