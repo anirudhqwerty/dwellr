@@ -227,7 +227,7 @@ export default function CreateListing() {
 
       console.log(' Listing created:', newListing.id);
 
-      // Send notifications to nearby seekers
+      // send notifications to nearby seekers
       try {
         console.log(' Sending notifications to nearby seekers...');
         const notificationResult = await sendNotificationToNearbyUsers(
@@ -266,11 +266,11 @@ export default function CreateListing() {
   };
 
   return (
-    //  WRAPPER: Pushes content up when keyboard opens
+   
     <KeyboardAvoidingView 
       style={{ flex: 1 }} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0} // Adjust if header overlaps
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <View style={styles.container}>
         <View style={styles.header}>

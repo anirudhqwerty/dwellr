@@ -57,6 +57,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => 
             renderTabIcon('https://img.icons8.com/ios/50/000000/chat--v1.png', color),
         }}
+        
       />
       <Tabs.Screen
         name="notifications"

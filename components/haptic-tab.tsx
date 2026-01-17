@@ -13,7 +13,7 @@ export function HapticTab(props: any) {
       style={[
         props.style,
         {
-          opacity: focused ? 1 : 0.7, // ✅ now valid
+          opacity: focused ? 1 : 0.7, 
         },
       ]}
     />

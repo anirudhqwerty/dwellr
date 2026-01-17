@@ -15,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import ListingDetailModal from '../../components/ListingDetailModal';
 
+
+
 export default function AllListingsScreen() {
   const [listings, setListings] = useState<any[]>([]);
   const [filteredListings, setFilteredListings] = useState<any[]>([]);

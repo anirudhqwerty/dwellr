@@ -403,7 +403,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 56,
   },
-  // Added a specific style helper for the icons
   vectorIcon: {
     marginRight: 12,
   },

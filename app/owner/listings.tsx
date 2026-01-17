@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import ListingDetailModal from '../../components/ListingDetailModal';
 
-// --- Micro-Component: Scale Animation ---
+
 const ScalePressable = ({ children, style, onPress }: any) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
 
@@ -45,7 +45,7 @@ const ScalePressable = ({ children, style, onPress }: any) => {
   );
 };
 
-// --- Micro-Component: Skeleton Loader ---
+
 const SkeletonCard = () => {
   const opacity = useRef(new Animated.Value(0.3)).current;
 
@@ -142,7 +142,7 @@ export default function MyListings() {
         onPress={() => openListingDetail(item)}
       >
         <View style={styles.cardContentRow}>
-          {/* 1. Property Image */}
+          
           <Image 
             source={{ 
               uri: item.images?.[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80' 
@@ -152,25 +152,25 @@ export default function MyListings() {
           />
           
           <View style={styles.cardDetails}>
-            {/* Header: Title + Options Icon */}
+            
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
               <Ionicons name="ellipsis-horizontal" size={20} color="#9CA3AF" />
             </View>
 
-            {/* Address */}
+            
             <View style={styles.row}>
               <Ionicons name="location-outline" size={14} color="#6B7280" />
               <Text style={styles.address} numberOfLines={1}>{item.address}</Text>
             </View>
 
-            {/* Price */}
+            
             <View style={styles.priceContainer}>
               <Text style={styles.price}>₹{item.rent?.toLocaleString()}</Text>
               <Text style={styles.perMonth}>/mo</Text>
             </View>
 
-            {/* Footer Stats (Date & Interested) */}
+            
             <View style={styles.cardFooter}>
               <Text style={styles.dateText}>
                 {new Date(item.created_at).toLocaleDateString()}
@@ -191,7 +191,7 @@ export default function MyListings() {
   return (
     <>
       <View style={styles.container}>
-        {/* Header */}
+        
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={10} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#111827" />

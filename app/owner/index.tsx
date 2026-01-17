@@ -21,7 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
-// --- Micro-Component: Scale Animation ---
+
 const ScalePressable = ({ children, style, onPress, activeScale = 0.97 }: any) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
 
@@ -60,7 +60,6 @@ const ScalePressable = ({ children, style, onPress, activeScale = 0.97 }: any) =
   );
 };
 
-// --- Micro-Component: Skeleton Loader ---
 const SkeletonCard = () => {
   const opacity = useRef(new Animated.Value(0.3)).current;
 
@@ -180,7 +179,7 @@ export default function OwnerHome() {
       style={styles.listingCard}
       onPress={() => openListingDetail(item)}
     >
-      {/* Image Section - Matching Seeker Index Style */}
+    
       <View style={styles.cardImageContainer}>
         <Image
           source={{ 
@@ -190,21 +189,21 @@ export default function OwnerHome() {
           resizeMode="cover"
         />
         
-        {/* Status Badge */}
+        
         <View style={[styles.statusBadge, { backgroundColor: item.status === 'active' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(243, 244, 246, 0.95)' }]}>
           <Text style={[styles.statusText, { color: item.status === 'active' ? '#059669' : '#4B5563' }]}>
             {item.status?.toUpperCase()}
           </Text>
         </View>
 
-        {/* Price Tag */}
+        
         <View style={styles.priceTag}>
           <Text style={styles.priceText}>₹{item.rent?.toLocaleString()}</Text>
           <Text style={styles.periodText}>/mo</Text>
         </View>
       </View>
 
-      {/* Content Section */}
+      
       <View style={styles.cardContent}>
         <View style={styles.cardHeaderRow}>
           <Text style={styles.listingTitle} numberOfLines={1}>{item.title}</Text>
@@ -218,7 +217,7 @@ export default function OwnerHome() {
           </Text>
         </View>
 
-        {/* Owner Specific Stats in Card */}
+       
         {item.interested_count > 0 && (
           <View style={styles.cardStatsRow}>
             <View style={styles.interestedBadge}>
@@ -242,7 +241,7 @@ export default function OwnerHome() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+      
         <View style={styles.headerContainer}>
           <View style={styles.headerTop}>
             <View>
@@ -257,7 +256,6 @@ export default function OwnerHome() {
             </ScalePressable>
           </View>
 
-          {/* Create Listing Button (Styled to pop) */}
           <ScalePressable style={styles.createButtonContainer} onPress={navigateToCreateListing}>
             <LinearGradient
               colors={['#111827', '#1F2937']}
@@ -277,7 +275,7 @@ export default function OwnerHome() {
           </ScalePressable>
         </View>
 
-        {/* Dashboard Stats (Removed Views) */}
+        
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Overview</Text>
           <View style={styles.statsGrid}>
@@ -292,7 +290,7 @@ export default function OwnerHome() {
           </View>
         </View>
 
-        {/* Quick Actions (Removed Analytics & Settings) */}
+        
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Manage</Text>
           <View style={styles.actionsGrid}>
@@ -311,7 +309,7 @@ export default function OwnerHome() {
           </View>
         </View>
 
-        {/* Listings Section */}
+       
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Your Listings</Text>

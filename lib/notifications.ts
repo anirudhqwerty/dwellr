@@ -51,7 +51,7 @@ export async function getFreshPushToken() {
       projectId: 'ca3eb4ae-f7a7-4f6e-abfe-c6f4641899d2',
     });
     
-    console.log('📱 FRESH PUSH TOKEN:', tokenResponse.data);
+    console.log(' FRESH PUSH TOKEN:', tokenResponse.data);
     return tokenResponse.data;
   } catch (error) {
     console.error("Error fetching push token:", error);
@@ -77,7 +77,7 @@ export async function sendNotificationToNearbyUsers(
   }
 ) {
   // ... existing implementation ...
-  console.log("🚀 STARTING NOTIFICATION SEND...");
+  console.log(" STARTING NOTIFICATION SEND...");
   
   try {
     const { data: nearbyUsers, error } = await supabase
@@ -92,7 +92,7 @@ export async function sendNotificationToNearbyUsers(
    const messages = nearbyUsers.map((user: any) => ({
     to: user.push_token,
     sound: 'default',
-    title: '🏠 New home near you!',
+    title: ' New home near you!',
     body: `₹${listingData.rent}/month • ${listingData.title} is just ${user.distance.toFixed(
       1
     )} km from your location`,
@@ -123,7 +123,7 @@ export async function sendNotificationToNearbyUsers(
 }
 
 export async function notifyOwnersAboutSeeker(seekerData: any) {
-  // ... existing implementation ...
+
   try {
     const { data: nearbyOwners, error } = await supabase
       .rpc('get_nearby_owners', {
@@ -138,7 +138,7 @@ export async function notifyOwnersAboutSeeker(seekerData: any) {
     const messages = nearbyOwners.map((owner: any) => ({
       to: owner.push_token,
       sound: 'default',
-      title: '🔍 Seeker Looking Nearby!',
+      title: ' Seeker Looking Nearby!',
       body: `Someone is looking for a property ${owner.distance.toFixed(1)} km from your listing`,
       data: { type: 'nearby_seeker', distance: owner.distance },
     }));

@@ -6,7 +6,6 @@ import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
 import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
-// Import the new helper
 import { getFreshPushToken } from '../../lib/notifications'; 
 
 export default function NotificationSettings() {
@@ -71,18 +70,16 @@ export default function NotificationSettings() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not found');
 
-      //  FIX: Always get a FRESH token when enabled
+     
       let pushToken = null;
       if (notificationsEnabled) {
         pushToken = await getFreshPushToken();
         
         if (!pushToken) {
-          // Optional: Alert user if token generation failed but they wanted notifications
           console.warn("Could not generate push token");
         }
       }
 
-      // Upsert notification settings
       const { error } = await supabase
         .from('notification_settings')
         .upsert({
@@ -91,7 +88,7 @@ export default function NotificationSettings() {
           radius_km: radius,
           latitude: location?.latitude,
           longitude: location?.longitude,
-          push_token: pushToken, // This will now be the fresh token or null
+          push_token: pushToken, 
           role: profile?.role,
         }, {
           onConflict: 'user_id'
@@ -115,7 +112,6 @@ export default function NotificationSettings() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  // ... rest of the render code remains exactly the same ...
   if (loading && !profile) {
     return (
       <View style={styles.loadingContainer}>
@@ -134,9 +130,9 @@ export default function NotificationSettings() {
         <View style={styles.placeholder} />
       </View>
       
-      {/* ... existing ScrollView content ... */}
+      
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        {/* ... (keep all your existing JSX here) ... */}
+        
         <View style={styles.section}>
           <View style={styles.iconContainer}>
             <Ionicons name="notifications" size={40} color="#007AFF" />
@@ -287,7 +283,6 @@ export default function NotificationSettings() {
 }
 
 const styles = StyleSheet.create({
-    // ... keep existing styles ...
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },

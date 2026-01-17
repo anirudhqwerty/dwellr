@@ -29,7 +29,7 @@ export default function SeekerMessages() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string>('');
 
-  //  Use useFocusEffect to reload when tab is focused
+
   useFocusEffect(
     useCallback(() => {
       loadConversations();

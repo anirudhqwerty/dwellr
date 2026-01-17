@@ -16,7 +16,6 @@ import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import ListingDetailModal from '../../components/ListingDetailModal';
 
-// --- Helper: Relative Time ---
 const getRelativeTime = (dateString: string) => {
   const date = new Date(dateString);
   const now = new Date();
@@ -125,14 +124,14 @@ export default function SavedScreen() {
   const renderListingCard = ({ item }: { item: any }) => (
     <ScalePressable style={styles.listingCard} onPress={() => openListingDetail(item)}>
       <View style={styles.cardContentRow}>
-        {/* Left Thumbnail - Fixed Dimensions & Corners */}
+        
         <Image 
           source={{ uri: item.images?.[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80' }} 
           style={styles.thumbnail}
           resizeMode="cover" 
         />
         
-        {/* Right Details */}
+        
         <View style={styles.cardDetails}>
           <View style={styles.cardHeader}>
             <Text style={styles.listingTitle} numberOfLines={1}>{item.title}</Text>
@@ -240,7 +239,7 @@ const styles = StyleSheet.create({
   // Clean Header
   header: {
     backgroundColor: '#FFFFFF',
-    paddingTop: 70, // More top space for modern feel
+    paddingTop: 70, 
     paddingHorizontal: 24,
     paddingBottom: 24,
     borderBottomWidth: 1,
@@ -280,19 +279,19 @@ const styles = StyleSheet.create({
   },
   cardContentRow: {
     flexDirection: 'row',
-    alignItems: 'center', // Vertically center the image with content
+    alignItems: 'center', 
     gap: 16,
   },
   thumbnail: {
-    width: 100,  // Increased size
-    height: 100, // Perfect square
-    borderRadius: 12, // Smooth corners (not too sharp, not too round)
+    width: 100,  
+    height: 100, 
+    borderRadius: 12, 
     backgroundColor: '#F3F4F6',
   },
   cardDetails: {
     flex: 1,
     justifyContent: 'center',
-    height: 100, // Match image height to vertically distribute text evenly
+    height: 100, 
   },
   cardHeader: {
     flexDirection: 'row',

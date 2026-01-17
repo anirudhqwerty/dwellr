@@ -74,7 +74,7 @@ export default function CompleteProfile() {
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.header}>
-        {/* Header Vector */}
+        
         <View style={styles.imageContainer}>
           <Image 
             source={{ uri: 'https://img.icons8.com/clouds/200/user.png' }} 
@@ -106,7 +106,7 @@ export default function CompleteProfile() {
         <View style={styles.inputContainer}>
           <Text style={styles.label}>I am a...</Text>
           <View style={styles.roleRow}>
-            {/* Seeker Role */}
+          
             <Pressable
               style={[
                 styles.roleButton,
@@ -135,7 +135,7 @@ export default function CompleteProfile() {
               </View>
             </Pressable>
 
-            {/* Owner Role */}
+         
             <Pressable
               style={[
                 styles.roleButton,
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     marginBottom: 20,
-    // Add a subtle shadow/glow behind the main vector
+    
     shadowColor: '#007AFF',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,

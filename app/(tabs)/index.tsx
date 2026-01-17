@@ -237,19 +237,25 @@ export default function SeekerHome() {
 
           <ScalePressable 
             style={styles.searchBar} 
-            onPress={handleUpdateLocation}
+            onPress={navigateToAllListings}
             activeScale={1} 
           >
             <Ionicons name="search" size={20} color="#111827" />
             <View style={styles.searchTextContainer}>
               <Text style={styles.searchTitle}>Find Home</Text>
-              <Text style={styles.searchSubtitle} numberOfLines={1}>
-                {profile?.address ? `Near ${profile.address.split(',')[0]}` : 'Anywhere nearby'}
+              <Text style={styles.searchSubtitle} numberOfLines={2}>
+                {profile?.address 
+                  ? `${profile.address.split(',').slice(0, 2).join(', ')}` 
+                  : 'Tap filter to set your location'}
               </Text>
             </View>
-            <View style={styles.searchFilterIcon}>
+            <Pressable
+              onPress={handleUpdateLocation}
+              hitSlop={10}
+              style={styles.searchFilterIcon}
+            >
               <Ionicons name="options-outline" size={18} color="#111827" />
-            </View>
+            </Pressable>
           </ScalePressable>
         </View>
 
@@ -466,8 +472,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     overflow: 'hidden',
-    borderWidth: 1.5,      // ⬅️ Increased from 1
-    borderColor: '#D1D5DB', // ⬅️ Darker (Gray-300)
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,

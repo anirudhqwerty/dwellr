@@ -10,7 +10,6 @@ import {
   Linking,
   Image,
   Dimensions,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -51,7 +50,6 @@ export default function ListingDetailModal({
     }
   }, [visible, listing]);
 
-  // ✅ Auto-slideshow effect (only when main modal is visible, not image modal)
   useEffect(() => {
     if (visible && !imageModalVisible && listing?.images && listing.images.length > 1) {
       startSlideshow();
@@ -63,12 +61,11 @@ export default function ListingDetailModal({
   }, [visible, imageModalVisible, listing?.images]);
 
   const startSlideshow = () => {
-    stopSlideshow(); // Clear any existing interval
+    stopSlideshow();
     slideshowIntervalRef.current = setInterval(() => {
       setCurrentImageIndex((prevIndex) => {
         const nextIndex = (prevIndex + 1) % listing.images.length;
         
-        // Scroll to next image
         if (scrollViewRef.current) {
           scrollViewRef.current.scrollTo({
             x: nextIndex * SCREEN_WIDTH,
@@ -78,7 +75,7 @@ export default function ListingDetailModal({
         
         return nextIndex;
       });
-    }, 3000); // 3 seconds per image
+    }, 3000);
   };
 
   const stopSlideshow = () => {
@@ -159,19 +156,16 @@ export default function ListingDetailModal({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
     try {
-      console.log('🔍 Looking for phone number...');
+      console.log(' Looking for phone number...');
       console.log('Listing:', listing);
       console.log('Listing owner_id:', listing?.owner_id);
       console.log('Listing owner_phone:', listing?.owner_phone);
       
-      // ✅ First try to get phone from the listing's owner join
       let phoneNumber = listing?.owner_phone;
       
-      // ✅ If not available, fetch directly from profiles table
       if (!phoneNumber && listing?.owner_id) {
-        console.log('📞 Fetching phone from profiles table...');
+        console.log(' Fetching phone from profiles table...');
         
-        // Use maybeSingle() instead of single() to avoid error when no rows
         const { data: ownerProfile, error } = await supabase
           .from('profiles')
           .select('phone')
@@ -179,7 +173,7 @@ export default function ListingDetailModal({
           .maybeSingle();
         
         if (error) {
-          console.error('❌ Error fetching owner profile:', error);
+          console.error(' Error fetching owner profile:', error);
         }
         
         console.log('Owner profile data:', ownerProfile);
@@ -200,7 +194,6 @@ export default function ListingDetailModal({
         return;
       }
 
-      // Remove any whitespace and validate
       const cleanedPhone = phoneNumber.trim().replace(/\s+/g, '');
       
       if (!cleanedPhone) {
@@ -210,7 +203,7 @@ export default function ListingDetailModal({
       
       const phoneUrl = `tel:${cleanedPhone}`;
       
-      console.log('📱 Calling:', phoneUrl);
+      console.log(' Calling:', phoneUrl);
       
       const canOpen = await Linking.canOpenURL(phoneUrl);
       if (!canOpen) {
@@ -220,7 +213,7 @@ export default function ListingDetailModal({
       
       await Linking.openURL(phoneUrl);
     } catch (error: any) {
-      console.error('❌ Error making call:', error);
+      console.error(' Error making call:', error);
       Alert.alert(
         'Call Error', 
         'Unable to place the call. Would you like to send a message instead?',
@@ -288,7 +281,6 @@ export default function ListingDetailModal({
 
   const closeImageModal = () => {
     setImageModalVisible(false);
-    // Restart slideshow when image modal closes
     if (visible && listing?.images && listing.images.length > 1) {
       startSlideshow();
     }
@@ -366,7 +358,6 @@ export default function ListingDetailModal({
                   </View>
                 )}
                 
-                {/* Slideshow indicator */}
                 {listing.images.length > 1 && (
                   <View style={styles.slideshowBadge}>
                     <Ionicons name="play-circle" size={16} color="#FFFFFF" />
@@ -471,7 +462,6 @@ export default function ListingDetailModal({
         </View>
       </Modal>
 
-      {/* ✅ Image Zoom/Swipe Modal */}
       <Modal
         visible={imageModalVisible}
         transparent={false}
@@ -512,7 +502,6 @@ export default function ListingDetailModal({
             ))}
           </ScrollView>
 
-          {/* Image indicator dots */}
           {listing?.images && listing.images.length > 1 && (
             <View style={styles.imageModalPagination}>
               {listing.images.map((_: any, index: number) => (
@@ -749,8 +738,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  
-  // ✅ Image Modal Styles
   imageModalContainer: {
     flex: 1,
     backgroundColor: '#000000',

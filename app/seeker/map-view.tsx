@@ -26,6 +26,7 @@ export default function MapViewScreen() {
     longitudeDelta: 0.1,
   });
 
+  
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
